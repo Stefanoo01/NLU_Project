@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import math
 import os
+import json
 
 def init_weights(mat):
     for m in mat.modules():
@@ -45,6 +46,43 @@ def train_loop(data, optimizer, criterion, model, clip=5):
         optimizer.step() # Update the weights
         
     return sum(loss_array)/sum(number_of_tokens)
+
+def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer):
+    losses_train = []
+    losses_dev = []
+    sampled_epochs = []
+    ppls = []
+    best_ppl = math.inf
+    best_model = None
+    best_epoch = -1
+    pbar = tqdm(range(1,n_epochs))
+    for epoch in pbar:
+            loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
+            if epoch % 1 == 0:
+                sampled_epochs.append(epoch)
+                losses_train.append(np.asarray(loss).mean())
+                ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
+                losses_dev.append(np.asarray(loss_dev).mean())
+                ppls.append(ppl_dev)
+                pbar.set_description("PPL: %f" % ppl_dev)
+                if  ppl_dev < best_ppl:
+                    best_ppl = ppl_dev
+                    best_model = copy.deepcopy(model).to('cpu')
+                    best_epoch = epoch
+                    patience = 3
+                else:
+                    patience -= 1
+                    
+                if patience <= 0:
+                    break
+
+    return best_model, {
+        'epochs': sampled_epochs,
+        'train_loss': losses_train,
+        'dev_loss': losses_dev,
+        'dev_ppl': ppls,
+        'best_epoch': best_epoch,
+    }
 
 def eval_loop(data, eval_criterion, model):
     model.eval()
@@ -118,7 +156,51 @@ def plot_perplexity(history, save_path=None):
     
     plt.show()
 
-#create a function that create a new folder
+def extract_report_data(results, model_name, output_path):
+    """
+    Extract essential information needed for writing a report and save to a file.
+    Args:
+        results: Dictionary containing training results and history
+        model_name: Name of the model (e.g., 'LSTM', 'RNN')
+        output_path: Path to the output file (e.g., 'report_data.json')
+    Returns:
+        report_data: Dictionary with essential information for report writing
+    """
+    config = results["config"]
+    history = results["history"]
+    best_dev_ppl = results["final_ppl"]
+
+    train_loss_reduction = ((history["train_loss"][0] - history["train_loss"][-1]) /
+                            history["train_loss"][0] * 100)
+
+    report_data = {
+        "model_name": model_name,
+        "embedding_size": config['emb_size'],
+        "hidden_size": config['hidden_size'],
+        "num_layers": config['n_layers'],
+        "dropout_rate": config['dropout'],
+        "learning_rate": config['lr'],
+        "weight_decay": config['weight_decay'],
+        "max_epochs": config['n_epochs'],
+        "early_stopping_patience": config['patience'],
+        "clip": config['clip'],
+        "epochs_trained": len(history['epochs']),
+        "best_epoch": history['best_epoch'],
+        "initial_train_loss": history['train_loss'][0],
+        "final_train_loss": history['train_loss'][-1],
+        "train_loss_reduction_percent": train_loss_reduction,
+        "best_validation_ppl": best_dev_ppl,
+        "epochs": history['epochs'],
+        "train_loss_history": history['train_loss'],
+        "dev_loss_history": history['dev_loss'],
+        "dev_ppl_history": history['dev_ppl']
+    }
+
+    with open(output_path, 'w') as f:
+        json.dump(report_data, f, indent=2)
+
+    return report_data
+
 def create_folder():
     base_dir = "results"
     # 1) Make sure "results" exists
