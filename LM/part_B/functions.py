@@ -24,9 +24,18 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
-def get_optimizer(model, lr=0.001, weight_decay=0.01):
-    # Replace SGD with AdamW
-    return optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+def get_optimizer(model, lr=0.1, weight_decay=0.0):
+    """
+    Returns an ASGD optimizer (Averaged SGD) with non-monotonic triggering.
+
+    Args:
+        model: the model to optimize
+        lr: learning rate
+        weight_decay: L2 penalty
+        t0: averaging start trigger
+        lambd: decay term
+    """
+    return optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 def train_loop(data, optimizer, criterion, model, clip=5):
     model.train()
@@ -45,6 +54,78 @@ def train_loop(data, optimizer, criterion, model, clip=5):
         optimizer.step() # Update the weights
         
     return sum(loss_array)/sum(number_of_tokens)
+
+def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer):
+    class NT_AVSGD_Trigger:
+        def __init__(self, non_monotone_n=5):
+            self.logs = []
+            self.t = 0
+            self.T = 0
+            self.non_monotone_n = non_monotone_n
+            self.triggered = False
+
+        def should_trigger(self, val_metric):
+            if self.triggered:
+                return False
+            if self.t > self.non_monotone_n and val_metric > min(self.logs[-self.non_monotone_n:]):
+                self.T = self.t
+                self.triggered = True
+                return True
+            self.logs.append(val_metric)
+            self.t += 1
+            return False
+
+    losses_train = []
+    losses_dev = []
+    sampled_epochs = []
+    ppls = []
+    best_ppl = math.inf
+    best_model = None
+    best_epoch = -1
+    patience = config.get("patience", 5)
+    trigger = NT_AVSGD_Trigger(non_monotone_n=5)
+
+    pbar = tqdm(range(1, n_epochs))
+    for epoch in pbar:
+        loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
+        if epoch % 1 == 0:
+            sampled_epochs.append(epoch)
+            losses_train.append(np.asarray(loss).mean())
+
+            if isinstance(optimizer, optim.ASGD):
+                tmp = {}
+                for prm in model.parameters():
+                    tmp[prm] = prm.data.clone()
+                    prm.data = optimizer.state[prm]['ax'].clone()
+                ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
+                for prm in model.parameters():
+                    prm.data = tmp[prm].clone()
+            else:
+                ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
+                if trigger.should_trigger(loss_dev):
+                    print(f"NT-AvSGD TRIGGERED at epoch {epoch}")
+                    optimizer = optim.ASGD(model.parameters(), lr=config['lr'], t0=0, lambd=0.)
+
+            losses_dev.append(np.asarray(loss_dev).mean())
+            ppls.append(ppl_dev)
+            pbar.set_description("PPL: %f" % ppl_dev)
+            if ppl_dev < best_ppl:
+                best_ppl = ppl_dev
+                best_model = copy.deepcopy(model).to('cpu')
+                best_epoch = epoch
+                patience = config.get("patience", 5)
+            else:
+                patience -= 1
+            if patience <= 0:
+                break
+
+    return best_model, {
+        'epochs': sampled_epochs,
+        'train_loss': losses_train,
+        'dev_loss': losses_dev,
+        'dev_ppl': ppls,
+        'best_epoch': best_epoch,
+    }
 
 def eval_loop(data, eval_criterion, model):
     model.eval()
