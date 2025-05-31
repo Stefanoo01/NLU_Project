@@ -87,6 +87,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
     best_model = None
     best_epoch = -1
     patience = config["patience"]
+    improvement_threshold = config["improvement_threshold"]
     trigger = NT_AVSGD_Trigger(non_monotone_n=5)
 
     pbar = tqdm(range(1, n_epochs))
@@ -101,23 +102,34 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                 for prm in model.parameters():
                     tmp[prm] = prm.data.clone()
                     prm.data = optimizer.state[prm]['ax'].clone()
+                if hasattr(model, 'lstm') and isinstance(model.lstm, nn.LSTM):
+                    model.lstm.flatten_parameters()
                 ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
                 for prm in model.parameters():
                     prm.data = tmp[prm].clone()
+                if hasattr(model, 'lstm') and isinstance(model.lstm, nn.LSTM):
+                    model.lstm.flatten_parameters()
             else:
                 ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
                 if trigger.should_trigger(loss_dev):
                     print(f"NT-AvSGD TRIGGERED at epoch {epoch}")
                     optimizer = optim.ASGD(model.parameters(), lr=config['lr'], t0=0, lambd=0.)
+                    if hasattr(model, 'lstm') and isinstance(model.lstm, nn.LSTM):
+                        model.lstm.flatten_parameters()
 
             losses_dev.append(np.asarray(loss_dev).mean())
             ppls.append(ppl_dev)
             pbar.set_description("PPL: %f" % ppl_dev)
+
+            improvement = best_ppl - ppl_dev
+
             if ppl_dev < best_ppl:
                 best_ppl = ppl_dev
                 best_model = copy.deepcopy(model).to()
                 best_epoch = epoch
                 patience = config["patience"]
+                if improvement < improvement_threshold:
+                    patience -= 1
             else:
                 patience -= 1
             if patience <= 0:
@@ -254,6 +266,7 @@ def extract_report_data(results, output_path):
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
+        "improvement_threshold": config["improvement_threshold"],
         
         # Training results
         "epochs_trained": len(history['epochs']),

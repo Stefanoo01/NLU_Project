@@ -19,16 +19,17 @@ config = {
     # Model architecture
     'emb_size': 800,       # Medium-sized embeddings
     'hid_size': 800,       # Larger hidden state for more capacity
-    'n_layers': 2,         # Two stacked LSTM layers
+    'n_layers': 1,         # Two stacked LSTM layers
 
     # Dropout
-    'emb_dropout': 0.2,
-    'out_dropout': 0.3,     
+    'emb_dropout': 0.5,
+    'out_dropout': 0.5,     
 
     # Training control
     'clip': 5,          # Gradient norm clipping at 0.25
     'n_epochs': 100,        # Train up to 100 epochs
     'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
+    'improvement_threshold': 0.01
 }
 
 if __name__ == "__main__":

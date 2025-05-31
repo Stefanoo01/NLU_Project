@@ -7,10 +7,12 @@ import numpy as np
 
 class VariationalDropout(nn.Module):
     def __init__(self, dropout_prob):
-        super().__init__()
+        super(VariationalDropout, self).__init__()
         self.dropout_prob = dropout_prob
 
     def forward(self, inputs):
+        if not self.training:
+            return inputs
         # inputs shape: (seq_len, batch_size, feature_dim)
         # Sample mask once per sequence
         device = inputs.device
@@ -24,7 +26,7 @@ class VariationalDropout(nn.Module):
         return inputs * mask
 
 class LM_LSTM(nn.Module):
-    def __init__(self, emb_size, hidden_size, output_size, pad_index=0, emb_dropout=0.2, out_dropout=0.3, n_layers=1):
+    def __init__(self, emb_size, hidden_size, output_size, pad_index=0, emb_dropout=0.5, out_dropout=0.5, n_layers=1):
         super(LM_LSTM, self).__init__()
         self.embedding = nn.Embedding(output_size, emb_size, padding_idx=pad_index)
         self.emb_dropout = VariationalDropout(emb_dropout)
@@ -33,11 +35,14 @@ class LM_LSTM(nn.Module):
         self.out_dropout = VariationalDropout(out_dropout)
         self.output = nn.Linear(hidden_size, output_size, bias=False)
         # Weight tying
-        self.output.weight = self.embedding.weight
+        if emb_size == hidden_size:
+            self.output.weight = self.embedding.weight
+        else:
+            raise ValueError("Weight tying is not possible: embedding size and hidden size must be equal.")
     
     def forward(self, input_sequence):
         emb = self.emb_dropout(self.embedding(input_sequence))
         lstm_out, _ = self.lstm(emb)
-        lstm_out = self.out_dropout(lstm_out)
-        output = self.output(lstm_out).permute(0,2,1)
+        out = self.out_dropout(lstm_out)
+        output = self.output(out).permute(0,2,1)
         return output
