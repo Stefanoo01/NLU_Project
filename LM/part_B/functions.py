@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.optim as optim
 import math
 import os
+import json
+from tqdm import tqdm
+import numpy as np
+import copy
+import matplotlib.pyplot as plt
 
 def init_weights(mat):
     for m in mat.modules():
@@ -24,18 +29,17 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
-def get_optimizer(model, lr=0.1, weight_decay=0.0):
+def get_optimizer(model, lr=0.1):
     """
     Returns an ASGD optimizer (Averaged SGD) with non-monotonic triggering.
 
     Args:
         model: the model to optimize
         lr: learning rate
-        weight_decay: L2 penalty
         t0: averaging start trigger
         lambd: decay term
     """
-    return optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+    return optim.SGD(model.parameters(), lr=lr)
 
 def train_loop(data, optimizer, criterion, model, clip=5):
     model.train()
@@ -214,7 +218,7 @@ def plot_perplexity(history, save_path=None):
         plt.savefig(save_path)
         print(f"Perplexity curve saved to {save_path}")
 
-def extract_report_data(results, model_name):
+def extract_report_data(results, output_path):
     """
     Extract essential information needed for writing a report
     
@@ -229,8 +233,7 @@ def extract_report_data(results, model_name):
     config = results["config"]
     history = results["history"]
     best_epoch = results["best_epoch"]
-    best_dev_ppl = results["best_dev_ppl"]
-    test_ppl = results["test_ppl"]
+    best_dev_ppl = results["final_ppl"]
     
     # Calculate training improvement
     train_loss_reduction = ((history["train_loss"][0] - history["train_loss"][-1]) / 
@@ -239,7 +242,6 @@ def extract_report_data(results, model_name):
     # Compile essential information
     report_data = {
         # Model architecture information
-        "model_name": model_name,
         "embedding_size": config['emb_size'],
         "hidden_size": config['hid_size'],
         "num_layers": config['n_layers'],
@@ -248,7 +250,7 @@ def extract_report_data(results, model_name):
         
         # Training parameters
         "learning_rate": config['lr'],
-        "weight_decay": config['weight_decay'],
+        "gamma": config['gamma'],
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
@@ -262,7 +264,6 @@ def extract_report_data(results, model_name):
         
         # Evaluation metrics
         "best_validation_ppl": best_dev_ppl,
-        "test_ppl": test_ppl,
         
         # Epoch data for plotting
         "epochs": history['epochs'],
@@ -270,6 +271,9 @@ def extract_report_data(results, model_name):
         "dev_loss_history": history['dev_loss'],
         "dev_ppl_history": history['dev_ppl']
     }
+
+    with open(output_path, 'w') as f:
+        json.dump(report_data, f, indent=2)
     
     return report_data
 

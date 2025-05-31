@@ -3,20 +3,22 @@ from utils import *
 from model import *
 from torch.utils.data import DataLoader
 from functools import partial
+import torch.optim.lr_scheduler as lr_scheduler
 import os
 
 TEST_MODEL = False
-SAVE_MODEL = True
-RESULTS = False
+SAVE_MODEL = False
+RESULTS = True
+DEVICE = "cuda:0"
 
 config = {
     # Optimizer
-    'lr': 20,            # A good default for AdamW on PTB
-    'weight_decay': 1e-6,  # Light weight-decay to regularize
+    'lr': 5,            # A good default for AdamW on PTB
+    'gamma': 0.75,
 
     # Model architecture
-    'emb_size': 650,       # Medium-sized embeddings
-    'hid_size': 650,       # Larger hidden state for more capacity
+    'emb_size': 800,       # Medium-sized embeddings
+    'hid_size': 800,       # Larger hidden state for more capacity
     'n_layers': 2,         # Two stacked LSTM layers
 
     # Dropout
@@ -51,7 +53,8 @@ if __name__ == "__main__":
     model = LM_LSTM(config["emb_size"], config["hid_size"], vocab_len, pad_index=lang.word2id["<pad>"], emb_dropout=config["emb_dropout"], out_dropout=config["out_dropout"]).to(DEVICE)
     model.apply(init_weights)
 
-    optimizer = get_optimizer(model, config["lr"], config["weight_decay"])
+    optimizer = get_optimizer(model, config["lr"])
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.75)
     criterion_train = nn.CrossEntropyLoss(ignore_index=lang.word2id["<pad>"])
     criterion_eval = nn.CrossEntropyLoss(ignore_index=lang.word2id["<pad>"], reduction='sum')
 
@@ -73,7 +76,7 @@ if __name__ == "__main__":
         results = {
             'config': config,
             'history': history,
-            'best_epoch': best_epoch,
+            'best_epoch': history["best_epoch"],
             'final_ppl': final_ppl,
         }
         extract_report_data(results, os.path.join(result_path, "result.json"))

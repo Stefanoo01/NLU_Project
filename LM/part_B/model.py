@@ -13,7 +13,8 @@ class VariationalDropout(nn.Module):
     def forward(self, inputs):
         # inputs shape: (seq_len, batch_size, feature_dim)
         # Sample mask once per sequence
-        mask = torch.bernoulli(torch.full((inputs.shape[2],), 1 - self.dropout_prob))
+        device = inputs.device
+        mask = torch.bernoulli(torch.full((inputs.shape[2],), 1 - self.dropout_prob, device=device))
         # Scale to keep expectation
         mask = mask / (1 - self.dropout_prob)
         # Expand mask for all sequence timesteps
