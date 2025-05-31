@@ -33,8 +33,8 @@ def init_weights(mat):
 def get_optimizer(model, type, lr=0.001, weight_decay=0.01):
     if type == 'SGD':
         return optim.SGD(model.parameters(), lr=lr)
-    elif type == 'Adam':
-        return optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    elif type == 'AdamW':
+        return optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 def train_loop(data, optimizer, criterion, model, clip=5):
     model.train()
@@ -77,6 +77,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                     best_ppl = ppl_dev
                     best_model = copy.deepcopy(model).to()
                     best_epoch = epoch
+                    patience = config["patience"]
                 else:
                     patience -= 1
                     
@@ -154,8 +155,6 @@ def plot_perplexity(history, save_path=None):
     if save_path:
         plt.savefig(save_path)
         print(f"Perplexity curve saved to {save_path}")
-    
-    plt.show()
 
 def extract_report_data(results, output_path):
     """

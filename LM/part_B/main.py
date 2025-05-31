@@ -10,15 +10,23 @@ SAVE_MODEL = True
 RESULTS = False
 
 config = {
-    'lr': 20.0,              # HIGH learning rate for SGD
-    'weight_decay': 1.2e-6,  # Typical for ASGD (Zaremba et al.)
-    'dropout': 0.5,
-    'hid_size': 200,
-    'emb_size': 300,
-    'clip': 5,
-    'n_layers': 1,
-    'n_epochs': 100,
-    'patience': 5
+    # Optimizer
+    'lr': 20,            # A good default for AdamW on PTB
+    'weight_decay': 1e-6,  # Light weight-decay to regularize
+
+    # Model architecture
+    'emb_size': 650,       # Medium-sized embeddings
+    'hid_size': 650,       # Larger hidden state for more capacity
+    'n_layers': 2,         # Two stacked LSTM layers
+
+    # Dropout
+    'emb_dropout': 0.2,
+    'out_dropout': 0.3,     
+
+    # Training control
+    'clip': 5,          # Gradient norm clipping at 0.25
+    'n_epochs': 100,        # Train up to 100 epochs
+    'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
 }
 
 if __name__ == "__main__":
@@ -40,7 +48,7 @@ if __name__ == "__main__":
 
     vocab_len = len(lang.word2id)
 
-    model = LM_LSTM(config["emb_size"], config["hid_size"], vocab_len, pad_index=lang.word2id["<pad>"]).to(DEVICE)
+    model = LM_LSTM(config["emb_size"], config["hid_size"], vocab_len, pad_index=lang.word2id["<pad>"], emb_dropout=config["emb_dropout"], out_dropout=config["out_dropout"]).to(DEVICE)
     model.apply(init_weights)
 
     optimizer = get_optimizer(model, config["lr"], config["weight_decay"])

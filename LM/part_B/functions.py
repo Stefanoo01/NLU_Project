@@ -82,7 +82,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
     best_ppl = math.inf
     best_model = None
     best_epoch = -1
-    patience = config.get("patience", 5)
+    patience = config["patience"]
     trigger = NT_AVSGD_Trigger(non_monotone_n=5)
 
     pbar = tqdm(range(1, n_epochs))
@@ -113,7 +113,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                 best_ppl = ppl_dev
                 best_model = copy.deepcopy(model).to()
                 best_epoch = epoch
-                patience = config.get("patience", 5)
+                patience = config["patience"]
             else:
                 patience -= 1
             if patience <= 0:
@@ -167,6 +167,28 @@ def plot_loss_curves(history, save_path=None):
     
     plt.show()
 
+def plot_loss_curves(history, save_path=None):
+    """
+    Plot training and validation loss curves
+    
+    Args:
+        history: Dictionary containing training history with keys 'epochs', 'train_loss', and 'dev_loss'
+        save_path: Optional path to save the figure
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(history["epochs"], history["train_loss"], 'b-', label="Training Loss")
+    plt.plot(history["epochs"], history["dev_loss"], 'r-', label="Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Loss curves saved to {save_path}")
+
 def plot_perplexity(history, save_path=None):
     """
     Plot validation perplexity curve
@@ -187,17 +209,10 @@ def plot_perplexity(history, save_path=None):
     best_ppl = min(history["dev_ppl"])
     best_epoch = history["epochs"][history["dev_ppl"].index(best_ppl)]
     plt.axhline(y=best_ppl, color='r', linestyle='--', alpha=0.5)
-    plt.annotate(f'Best PPL: {best_ppl:.2f}', 
-                 xy=(best_epoch, best_ppl),
-                 xytext=(best_epoch+1, best_ppl+1),
-                 arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=8),
-                 fontsize=10)
     
     if save_path:
         plt.savefig(save_path)
         print(f"Perplexity curve saved to {save_path}")
-    
-    plt.show()
 
 def extract_report_data(results, model_name):
     """
@@ -226,9 +241,10 @@ def extract_report_data(results, model_name):
         # Model architecture information
         "model_name": model_name,
         "embedding_size": config['emb_size'],
-        "hidden_size": config['hidden_size'],
+        "hidden_size": config['hid_size'],
         "num_layers": config['n_layers'],
-        "dropout_rate": config['dropout'],
+        "emb_dropout": config['emb_dropout'],
+        "out_dropout": config['out_dropout'],
         
         # Training parameters
         "learning_rate": config['lr'],

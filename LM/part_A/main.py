@@ -5,15 +5,15 @@ from torch.utils.data import DataLoader
 from functools import partial
 import os
 
-TEST_MODEL = False
+TEST_MODEL = True
 SAVE_MODEL = False
-RESULTS = True
+RESULTS = False
 DEVICE = "cuda:0"
 
 config = {
     # Optimizer
-    'optimizer': 'SGD',
-    'lr': 1e-3,            # A good default for AdamW on PTB
+    'optimizer': 'AdamW',  # "SGD" or "AdamW"
+    'lr': 1e-4,            # A good default for AdamW on PTB
     'weight_decay': 1e-6,  # Light weight-decay to regularize
 
     # Model architecture
@@ -28,7 +28,7 @@ config = {
 
     # Training control
     'clip': 0.25,          # Gradient norm clipping at 0.25
-    'n_epochs': 2,        # Train up to 100 epochs
+    'n_epochs': 100,        # Train up to 100 epochs
     'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
 }
 
