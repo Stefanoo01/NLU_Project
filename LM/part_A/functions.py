@@ -4,6 +4,11 @@ import torch.optim as optim
 import math
 import os
 import json
+from tqdm import tqdm
+import numpy as np
+import copy
+import matplotlib.pyplot as plt
+from main import DEVICE
 
 def init_weights(mat):
     for m in mat.modules():
@@ -55,6 +60,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
     best_ppl = math.inf
     best_model = None
     best_epoch = -1
+    patience = config["patience"]
     pbar = tqdm(range(1,n_epochs))
     for epoch in pbar:
             loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
@@ -67,9 +73,8 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                 pbar.set_description("PPL: %f" % ppl_dev)
                 if  ppl_dev < best_ppl:
                     best_ppl = ppl_dev
-                    best_model = copy.deepcopy(model).to('cpu')
+                    best_model = copy.deepcopy(model).to()
                     best_epoch = epoch
-                    patience = 3
                 else:
                     patience -= 1
                     
@@ -117,12 +122,11 @@ def plot_loss_curves(history, save_path=None):
     plt.title("Training and Validation Loss")
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
     
     if save_path:
         plt.savefig(save_path)
         print(f"Loss curves saved to {save_path}")
-    
-    plt.show()
 
 def plot_perplexity(history, save_path=None):
     """
@@ -144,11 +148,6 @@ def plot_perplexity(history, save_path=None):
     best_ppl = min(history["dev_ppl"])
     best_epoch = history["epochs"][history["dev_ppl"].index(best_ppl)]
     plt.axhline(y=best_ppl, color='r', linestyle='--', alpha=0.5)
-    plt.annotate(f'Best PPL: {best_ppl:.2f}', 
-                 xy=(best_epoch, best_ppl),
-                 xytext=(best_epoch+1, best_ppl+1),
-                 arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=8),
-                 fontsize=10)
     
     if save_path:
         plt.savefig(save_path)
@@ -156,7 +155,7 @@ def plot_perplexity(history, save_path=None):
     
     plt.show()
 
-def extract_report_data(results, model_name, output_path):
+def extract_report_data(results, output_path):
     """
     Extract essential information needed for writing a report and save to a file.
     Args:
@@ -174,9 +173,8 @@ def extract_report_data(results, model_name, output_path):
                             history["train_loss"][0] * 100)
 
     report_data = {
-        "model_name": model_name,
         "embedding_size": config['emb_size'],
-        "hidden_size": config['hidden_size'],
+        "hidden_size": config['hid_size'],
         "num_layers": config['n_layers'],
         "dropout_rate": config['dropout'],
         "learning_rate": config['lr'],

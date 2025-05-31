@@ -23,7 +23,7 @@ config = {
 
 if __name__ == "__main__":
     path = os.path.dirname(os.path.abspath(__file__))
-    dataset_path = os.path.join(path, "dataset/PennTreebank")
+    dataset_path = os.path.join(path, "dataset/PennTreeBank")
 
     train_raw = read_file(os.path.join(dataset_path, "ptb.train.txt"))
     dev_raw = read_file(os.path.join(dataset_path, "ptb.valid.txt"))

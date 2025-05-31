@@ -111,7 +111,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
             pbar.set_description("PPL: %f" % ppl_dev)
             if ppl_dev < best_ppl:
                 best_ppl = ppl_dev
-                best_model = copy.deepcopy(model).to('cpu')
+                best_model = copy.deepcopy(model).to()
                 best_epoch = epoch
                 patience = config.get("patience", 5)
             else:

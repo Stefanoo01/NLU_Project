@@ -6,24 +6,32 @@ from functools import partial
 import os
 
 TEST_MODEL = False
-SAVE_MODEL = True
-RESULTS = False
+SAVE_MODEL = False
+RESULTS = True
+DEVICE = "cuda:0"
 
 config = {
-    'lr': 0.0001,
-    'dropout': 0.5,
-    'hid_size': 200,
-    'emb_size': 300,
-    'clip': 5,
-    'n_layers': 1,
-    'weight_decay': 0.01,
-    'n_epochs': 100,
-    'patience': 3
+    # Optimizer
+    'lr': 1e-3,            # A good default for AdamW on PTB
+    'weight_decay': 1e-6,  # Light weight-decay to regularize
+
+    # Model architecture
+    'emb_size': 650,       # Medium-sized embeddings
+    'hid_size': 650,       # Larger hidden state for more capacity
+    'n_layers': 2,         # Two stacked LSTM layers
+
+    # Dropout
+    'dropout': 0.3,        # Keep-probability ~0.7 (applied after embeddings & before output)
+
+    # Training control
+    'clip': 0.25,          # Gradient norm clipping at 0.25
+    'n_epochs': 2,        # Train up to 100 epochs
+    'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
 }
 
 if __name__ == "__main__":
     path = os.path.dirname(os.path.abspath(__file__))
-    dataset_path = os.path.join(path, "dataset/PennTreebank")
+    dataset_path = os.path.join(path, "dataset/PennTreeBank")
     train_raw = read_file(os.path.join(dataset_path, "ptb.train.txt"))
     dev_raw = read_file(os.path.join(dataset_path, "ptb.valid.txt"))
     test_raw = read_file(os.path.join(dataset_path, "ptb.test.txt"))
@@ -51,23 +59,23 @@ if __name__ == "__main__":
         final_ppl,  _ = eval_loop(test_loader, criterion_eval, model)
 
     else:
-        best_model, history = train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer)
-        best_model.to(device)
+        best_model, history = train(model, config, train_loader, dev_loader, config["n_epochs"], criterion_train, criterion_eval, optimizer)
+        best_model.to(DEVICE)
         final_ppl,  _ = eval_loop(test_loader, criterion_eval, best_model)
         if SAVE_MODEL:
             torch.save(best_model.state_dict(), os.path.join(path, "model.pt"))
+        if RESULTS:
+            result_path = os.path.join(path, create_folder())
+            print(result_path)
+            results = {
+                'config': config,
+                'history': history,
+                'best_epoch': history["best_epoch"],
+                'final_ppl': final_ppl,
+            }
+            extract_report_data(results, os.path.join(result_path, "result.json"))
+            plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
+            plot_perplexity(history, os.path.join(result_path, "perplexity.png"))
+            torch.save(best_model.state_dict(), os.path.join(result_path, "model.pt"))
 
-        print("Final PPL: %f" % final_ppl)
-
-    if RESULTS:
-        result_path = os.path.join(path, create_folder())
-        results = {
-            'config': config,
-            'history': history,
-            'best_epoch': best_epoch,
-            'final_ppl': final_ppl,
-        }
-        extract_report_data(results, os.path.join(result_path, "result.json"))
-        plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
-        plot_perplexity(history, os.path.join(result_path, "perplexity.png"))
-        torch.save(best_model.state_dict(), os.path.join(result_path, "model.pt"))
+    print("Final PPL: %f" % final_ppl)
