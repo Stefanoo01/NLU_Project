@@ -6,17 +6,19 @@ import math
 import numpy as np
 
 class LM_LSTM(nn.Module):
-    def __init__(self, emb_size, hidden_size, output_size, pad_index=0, emb_dropout=0.2, out_dropout=0.3, n_layers=1):
+    def __init__(self, emb_size, hidden_size, dropout, output_size, pad_index=0, emb_dropout=0.2, out_dropout=0.3, n_layers=1):
         super(LM_LSTM, self).__init__()
         # Token ids to vectors
         self.embedding = nn.Embedding(output_size, emb_size, padding_idx=pad_index)
-        # Dropout after embedding layer
-        self.emb_dropout = nn.Dropout(emb_dropout)
+        if dropout:
+            # Dropout after embedding layer
+            self.emb_dropout = nn.Dropout(emb_dropout)
         # Replace RNN with LSTM
         self.lstm = nn.LSTM(emb_size, hidden_size, n_layers, bidirectional=False, batch_first=True)    
         self.pad_token = pad_index
-        # Dropout before the linear layer
-        self.out_dropout = nn.Dropout(out_dropout)
+        if dropout:
+            # Dropout before the linear layer
+            self.out_dropout = nn.Dropout(out_dropout)
         # Linear layer to project the hidden layer to our output space
         self.output = nn.Linear(hidden_size, output_size)
         
@@ -24,11 +26,13 @@ class LM_LSTM(nn.Module):
         # Apply embedding
         emb = self.embedding(input_sequence)
         # Apply dropout after embedding
-        emb = self.emb_dropout(emb)
+        if hasattr(self, 'emb_dropout'):
+            emb = self.emb_dropout(emb)
         # Process through LSTM
         lstm_out, _ = self.lstm(emb)
         # Apply dropout before linear layer
-        lstm_out = self.out_dropout(lstm_out)
+        if hasattr(self, 'out_dropout'):
+            lstm_out = self.out_dropout(lstm_out)
         # Project to output space
         output = self.output(lstm_out).permute(0,2,1)
         return output

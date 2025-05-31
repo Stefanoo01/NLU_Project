@@ -30,9 +30,11 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
-def get_optimizer(model, lr=0.001, weight_decay=0.01):
-    # Replace SGD with AdamW
-    return optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+def get_optimizer(model, type, lr=0.001, weight_decay=0.01):
+    if type == 'SGD':
+        return optim.SGD(model.parameters(), lr=lr)
+    elif type == 'Adam':
+        return optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 def train_loop(data, optimizer, criterion, model, clip=5):
     model.train()
@@ -176,7 +178,10 @@ def extract_report_data(results, output_path):
         "embedding_size": config['emb_size'],
         "hidden_size": config['hid_size'],
         "num_layers": config['n_layers'],
-        "dropout_rate": config['dropout'],
+        "dropout": config['dropout'],
+        "emb_dropout": config['emb_dropout'] if config['dropout'] else 'None',
+        "out_dropout": config['out_dropout'] if config['dropout'] else 'None',
+        "optimizer": config['optimizer'],
         "learning_rate": config['lr'],
         "weight_decay": config['weight_decay'],
         "max_epochs": config['n_epochs'],

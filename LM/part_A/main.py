@@ -12,6 +12,7 @@ DEVICE = "cuda:0"
 
 config = {
     # Optimizer
+    'optimizer': 'SGD',
     'lr': 1e-3,            # A good default for AdamW on PTB
     'weight_decay': 1e-6,  # Light weight-decay to regularize
 
@@ -21,7 +22,9 @@ config = {
     'n_layers': 2,         # Two stacked LSTM layers
 
     # Dropout
-    'dropout': 0.3,        # Keep-probability ~0.7 (applied after embeddings & before output)
+    'dropout': False,
+    'emb_dropout': 0.2,
+    'out_dropout': 0.3,     
 
     # Training control
     'clip': 0.25,          # Gradient norm clipping at 0.25
@@ -47,10 +50,10 @@ if __name__ == "__main__":
 
     vocab_len = len(lang.word2id)
 
-    model = LM_LSTM(config["emb_size"], config["hid_size"], vocab_len, pad_index=lang.word2id["<pad>"]).to(DEVICE)
+    model = LM_LSTM(config["emb_size"], config["hid_size"], config["dropout"], vocab_len, pad_index=lang.word2id["<pad>"], emb_dropout=config["emb_dropout"], out_dropout=config["out_dropout"]).to(DEVICE)
     model.apply(init_weights)
 
-    optimizer = get_optimizer(model, config["lr"], config["weight_decay"])
+    optimizer = get_optimizer(model, config["optimizer"], config["lr"], config["weight_decay"])
     criterion_train = nn.CrossEntropyLoss(ignore_index=lang.word2id["<pad>"])
     criterion_eval = nn.CrossEntropyLoss(ignore_index=lang.word2id["<pad>"], reduction='sum')
 
