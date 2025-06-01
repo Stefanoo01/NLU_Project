@@ -20,8 +20,7 @@ class VariationalDropout(nn.Module):
         # Scale to keep expectation
         mask = mask / (1 - self.dropout_prob)
         # Expand mask for all sequence timesteps
-        mask = mask.unsqueeze(0).unsqueeze(0)  # shape: (1,1,feature_dim)
-        mask = mask.expand(inputs.shape)        # shape: (seq_len, batch_size, feature_dim)
+        mask = mask.unsqueeze(0).expand(inputs.shape)
         # Apply mask
         return inputs * mask
 

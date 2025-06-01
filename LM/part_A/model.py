@@ -13,7 +13,7 @@ class LM_LSTM(nn.Module):
         if dropout:
             # Dropout after embedding layer
             self.emb_dropout = nn.Dropout(emb_dropout)
-        # Replace RNN with LSTM
+        # LSTM layer
         self.lstm = nn.LSTM(emb_size, hidden_size, n_layers, bidirectional=False, batch_first=True)    
         self.pad_token = pad_index
         if dropout:
