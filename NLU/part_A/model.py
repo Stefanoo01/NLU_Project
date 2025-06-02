@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class ModelIAS(nn.Module):
@@ -9,11 +10,11 @@ class ModelIAS(nn.Module):
         # out_slot = number of slots (output size for slot filling)
         # out_int = number of intents (output size for intent class)
         # emb_size = word embedding size
-        
+        self.dropout_flag = dropout
         self.embedding = nn.Embedding(vocab_len, emb_size, padding_idx=pad_index)
         
         self.utt_encoder = nn.LSTM(emb_size, hid_size, n_layer, bidirectional=bidirectional, batch_first=True)    
-        elf.slot_out = nn.Linear(hid_size * (2 if bidirectional else 1), out_slot)
+        self.slot_out = nn.Linear(hid_size * (2 if bidirectional else 1), out_slot)
         self.intent_out = nn.Linear(hid_size * (2 if bidirectional else 1), out_int)
 
         if dropout:
@@ -21,8 +22,7 @@ class ModelIAS(nn.Module):
         
     def forward(self, utterance, seq_lengths):
         utt_emb = self.embedding(utterance) # utt_emb.size() = batch_size X seq_len X emb_size
-        dropout_flag = self.hasattr(self, 'dropout')
-        if dropout_flag:
+        if self.dropout_flag:
             utt_emb = self.dropout(utt_emb)
         
         # Pack the sequence
@@ -38,7 +38,7 @@ class ModelIAS(nn.Module):
         else:
             last_hidden = last_hidden[-1,:,:]
 
-        if dropout_flag:
+        if self.dropout_flag:
             utt_encoded = self.dropout(utt_encoded)
             last_hidden = self.dropout(last_hidden)
         

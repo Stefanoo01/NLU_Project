@@ -5,6 +5,10 @@ import torch
 import torch.nn as nn
 import os
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import numpy as np
+import json
+import copy
 
 def init_weights(mat):
     for m in mat.modules():
@@ -49,7 +53,7 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
     for _ in tqdm(range(config["runs"])):
         patience = config["patience"]
         best_f1 = 0
-        best_model = None
+        best_model = copy.deepcopy(model).to()
         best_epoch = -1
         losses_train = []
         losses_dev = []
@@ -94,6 +98,9 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         "mean_intent_accuracy": np.asarray(intent_accs).mean(),
         "std_intent_accuracy": np.asarray(intent_accs).std(),
         "best_epoch": best_epoch,
+        "train_loss": losses_train,
+        "dev_loss": losses_dev,
+        "epochs": sampled_epochs,
     }
 
 def eval_loop(data, criterion_slots, criterion_intents, model, lang):
@@ -212,10 +219,10 @@ def extract_report_data(results, output_path):
         "train_loss_reduction_percent": train_loss_reduction,
         
         # Evaluation metrics
-        "mean_slot_f1_score": history['slot_mean_f1_score'],
-        "std_slot_f1_score": history['slot_std_f1_score'],
-        "mean_intent_accuracy": history['intent_mean_accuracy'],
-        "std_intent_accuracy": history['intent_std_accuracy'],
+        "mean_slot_f1_score": history['mean_slot_f1_score'],
+        "std_slot_f1_score": history['std_slot_f1_score'],
+        "mean_intent_accuracy": history['mean_intent_accuracy'],
+        "std_intent_accuracy": history['std_intent_accuracy'],
 
         # Epoch data for plotting
         "runs": config['runs'],

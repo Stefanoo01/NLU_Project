@@ -2,8 +2,8 @@ from functions import *
 from model import *
 from utils import *
 from torch.utils.data import DataLoader
-from functools import partial
 import os
+import torch.optim as optim
 
 TEST_MODEL = False
 SAVE_MODEL = False
@@ -12,12 +12,12 @@ DEVICE = "cuda:0"
 
 config = {
     # Optimizer
-    'lr': 5,            # A good default for AdamW on PTB
+    'lr': 0.0001,            # A good default for AdamW on PTB
     'gamma': 0.75,
 
     # Model architecture
-    'emb_size': 950,       # Medium-sized embeddings
-    'hid_size': 950,       # Larger hidden state for more capacity
+    'emb_size': 200,       # Medium-sized embeddings
+    'hid_size': 300,       # Larger hidden state for more capacity
     'n_layers': 1,         # Two stacked LSTM layers
 
     # Dropout
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     lang = Lang(words, intents, slots, cutoff=0)
 
     if TEST_MODEL:
-        saving_object = torch.load(os.path.join(DATASET_PATH, "bin", WEIGHTS))
+        saving_object = torch.load(os.path.join(path, "model.pt"))
         lang.word2id = saving_object['w2id']
         lang.slot2id = saving_object['slot2id']
         lang.intent2id = saving_object['intent2id']
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     out_int = len(lang.intent2id)
     vocab_len = len(lang.word2id)
 
-    model = ModelIAS(config["hid_size"], out_slot, out_int, config["emb_size"], vocab_len, pad_index=PAD_TOKEN).to(device)
+    model = ModelIAS(config["hid_size"], out_slot, out_int, config["emb_size"], vocab_len, pad_index=PAD_TOKEN).to(DEVICE)
     model.apply(init_weights)
 
     optimizer = optim.Adam(model.parameters(), lr=config["lr"])
@@ -82,8 +82,8 @@ if __name__ == "__main__":
     else:
         best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang)
         
-        print('Slot F1', round(slot_f1s.mean(),3), '+-', round(slot_f1s.std(),3))
-        print('Intent Acc', round(intent_acc.mean(), 3), '+-', round(slot_f1s.std(), 3))
+        print('Slot F1 score', round(history["slot_f1_scores"].mean(),3), '+-', round(history["slot_f1_scores"].std(),3))
+        print('Intent Accuracy', round(history["intent_accuracies"].mean(), 3), '+-', round(history["intent_accuracies"].std(), 3))
 
         if SAVE_MODEL:
             saving_object = {"epoch": x, 
