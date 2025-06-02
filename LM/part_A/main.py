@@ -69,7 +69,6 @@ if __name__ == "__main__":
             torch.save(best_model.state_dict(), os.path.join(path, "model.pt"))
         if RESULTS:
             result_path = os.path.join(path, create_folder())
-            print(result_path)
             results = {
                 'config': config,
                 'history': history,

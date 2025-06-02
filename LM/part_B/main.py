@@ -17,8 +17,8 @@ config = {
     'gamma': 0.75,
 
     # Model architecture
-    'emb_size': 800,       # Medium-sized embeddings
-    'hid_size': 800,       # Larger hidden state for more capacity
+    'emb_size': 950,       # Medium-sized embeddings
+    'hid_size': 950,       # Larger hidden state for more capacity
     'n_layers': 1,         # Two stacked LSTM layers
 
     # Dropout

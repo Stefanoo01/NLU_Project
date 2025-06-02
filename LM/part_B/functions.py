@@ -141,6 +141,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
         'dev_loss': losses_dev,
         'dev_ppl': ppls,
         'best_epoch': best_epoch,
+        'avsgd_trigger_epoch': trigger.T if trigger.triggered else None
     }
 
 def eval_loop(data, eval_criterion, model):
@@ -180,8 +181,6 @@ def plot_loss_curves(history, save_path=None):
     if save_path:
         plt.savefig(save_path)
         print(f"Loss curves saved to {save_path}")
-    
-    plt.show()
 
 def plot_loss_curves(history, save_path=None):
     """
@@ -267,6 +266,7 @@ def extract_report_data(results, output_path):
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
         "improvement_threshold": config["improvement_threshold"],
+        "avsgd_trigger_epoch": history["avsgd_trigger_epoch"],
         
         # Training results
         "epochs_trained": len(history['epochs']),
