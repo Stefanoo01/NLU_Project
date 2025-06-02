@@ -43,10 +43,10 @@ def train_loop(data, optimizer, criterion_slots, criterion_intents, model, clip=
         optimizer.step() # Update the weights
     return loss_array
 
-def train(model, config, train_loader, dev_loader, test_loader, runs, n_epochs, criterion_slots, criterion_intents, optimizer, lang):
+def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang):
     slot_f1s, intent_accs = [], []
 
-    for _ in tqdm(range(runs)):
+    for _ in tqdm(range(config["runs"])):
         patience = config["patience"]
         best_f1 = 0
         best_model = None

@@ -1,6 +1,9 @@
 from functions import *
 from model import *
 from utils import *
+from torch.utils.data import DataLoader
+from functools import partial
+import os
 
 TEST_MODEL = False
 SAVE_MODEL = False
@@ -63,10 +66,10 @@ if __name__ == "__main__":
     out_int = len(lang.intent2id)
     vocab_len = len(lang.word2id)
 
-    model = ModelIAS(hid_size, out_slot, out_int, emb_size, vocab_len, pad_index=PAD_TOKEN).to(device)
+    model = ModelIAS(config["hid_size"], out_slot, out_int, config["emb_size"], vocab_len, pad_index=PAD_TOKEN).to(device)
     model.apply(init_weights)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=config["lr"])
     criterion_slots = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
     criterion_intents = nn.CrossEntropyLoss()
 
@@ -77,7 +80,7 @@ if __name__ == "__main__":
         print('Intent Accuracy:', intent_test['accuracy'])
 
     else:
-        best_model, history = train(model, config, train_loader, dev_loader, test_loader, runs, n_epochs, criterion_slots, criterion_intents, optimizer, lang)
+        best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang)
         
         print('Slot F1', round(slot_f1s.mean(),3), '+-', round(slot_f1s.std(),3))
         print('Intent Acc', round(intent_acc.mean(), 3), '+-', round(slot_f1s.std(), 3))
@@ -90,7 +93,7 @@ if __name__ == "__main__":
                         "slot2id": lang.slot2id, 
                         "intent2id": lang.intent2id}
             torch.save(saving_object, os.path.join(path, "model.pt"))
-            
+
         if RESULTS:
             result_path = os.path.join(path, create_folder())
             results = {
