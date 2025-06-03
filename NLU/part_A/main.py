@@ -13,7 +13,6 @@ DEVICE = "cuda:0"
 config = {
     # Optimizer
     'lr': 0.001,            # A good default for AdamW on PTB
-    'gamma': 0.75,
 
     # Model architecture
     'emb_size': 200,       # Medium-sized embeddings
@@ -85,7 +84,7 @@ if __name__ == "__main__":
         print('Intent Accuracy', round(history["intent_accuracies"].mean(), 3), '+-', round(history["intent_accuracies"].std(), 3))
 
         if SAVE_MODEL:
-            saving_object = {"epoch": x, 
+            saving_object = {"epoch": 0, 
                         "model": model.state_dict(), 
                         "optimizer": optimizer.state_dict(), 
                         "w2id": lang.word2id, 
@@ -102,7 +101,7 @@ if __name__ == "__main__":
             }
             extract_report_data(results, os.path.join(result_path, "result.json"))
             plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
-            saving_object = {"epoch": x, 
+            saving_object = {"epoch": 0, 
                         "model": model.state_dict(), 
                         "optimizer": optimizer.state_dict(), 
                         "w2id": lang.word2id, 

@@ -5,7 +5,7 @@ from transformers import BertModel
 
 class ModelBERT(nn.Module):
 
-    def __init__(self, out_slot, out_int, dropout=0.5):
+    def __init__(self, config, out_slot, out_int, dropout=0.5):
         super(ModelBERT, self).__init__()
         
         self.num_intents = out_int
@@ -19,8 +19,8 @@ class ModelBERT(nn.Module):
         
     def forward(self, attention_mask, token_type_ids, input_ids):
         bert_output = self.bert(attention_mask=attention_mask, token_type_ids=token_type_ids, input_ids=input_ids)
-        last_hidden_states = bert_out.last_hidden_state
-        pooler_output = bert_out.pooler_output
+        last_hidden_states = bert_output.last_hidden_state
+        pooler_output = bert_output.pooler_output
         
         dropout_slots = self.dropout(last_hidden_states)
         dropout_intent = self.dropout(pooler_output)

@@ -9,6 +9,7 @@ from tqdm import tqdm
 import numpy as np
 import json
 import copy
+from main import TOKENIZER
 
 def init_weights(mat):
     for m in mat.modules():
@@ -53,6 +54,9 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
     best_f1 = 0
     slot_f1 = 0
     intent_acc = 0
+    sampled_epochs = []
+    losses_train = []
+    losses_dev = []
 
     for epoch in tqdm(range(1, config["n_epochs"])):
         loss = train_loop(train_loader, optimizer, criterion_slots, criterion_intents, model, clip=config["clip"])
@@ -86,8 +90,8 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         intent_acc = intent_test["accuracy"]
 
     return best_model, {
-        "slot_f1_score": np.asarray(slot_f1),
-        "intent_accuracy": np.asarray(intent_acc),
+        "slot_f1_score": slot_f1,
+        "intent_accuracy": intent_acc,
         "best_epoch": best_epoch,
         "train_loss": losses_train,
         "dev_loss": losses_dev,
@@ -128,7 +132,7 @@ def eval_loop(data, criterion_slots, criterion_intents, model, lang):
                 utt_ids = [int(x) for x in utt_ids]
                 gt_ids = sample['y_slots'][id_seq].tolist()
                 gt_slots = [lang.id2slot[elem] for elem in gt_ids[:length]]
-                utterance = [tokenizer.conver_ids_to_tokens(elem) for elem in utt_ids]
+                utterance = [TOKENIZER.convert_ids_to_tokens(elem) for elem in utt_ids]
                 to_decode = seq[:length].tolist()
                 ref_slots.append([(utterance[id_el], elem) for id_el, elem in enumerate(gt_slots[1:-1], start=1)])
                 ref_slots_pad.append([(utterance[id_el], elem) for id_el, elem in enumerate(gt_slots[1:-1], start=1) if elem != 'pad'])
@@ -196,14 +200,10 @@ def extract_report_data(results, output_path):
     # Compile essential information
     report_data = {
         # Model architecture information
-        "embedding_size": config['emb_size'],
-        "hidden_size": config['hid_size'],
-        "num_layers": config['n_layers'],
         "dropout": config['dropout'],
         
         # Training parameters
         "learning_rate": config['lr'],
-        "gamma": config['gamma'],
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
@@ -216,13 +216,10 @@ def extract_report_data(results, output_path):
         "train_loss_reduction_percent": train_loss_reduction,
         
         # Evaluation metrics
-        "mean_slot_f1_score": history['mean_slot_f1_score'],
-        "std_slot_f1_score": history['std_slot_f1_score'],
-        "mean_intent_accuracy": history['mean_intent_accuracy'],
-        "std_intent_accuracy": history['std_intent_accuracy'],
+        "slot_f1_score:": history['slot_f1_score'],
+        "intent_accuracy:": history['intent_accuracy'],
 
         # Epoch data for plotting
-        "runs": config['runs'],
         "epochs": history['epochs'],
         "train_loss_history": history['train_loss'],
         "dev_loss_history": history['dev_loss'],

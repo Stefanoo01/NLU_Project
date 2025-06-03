@@ -58,7 +58,7 @@ class IntentsAndSlots (data.Dataset):
             self.slots.append(x['slots'])
             self.intents.append(x['intent'])
 
-        self.utt_ids, self.slot_ids = self.mapping_seq(self.utterances, lang.word2id)
+        self.utt_ids, self.slot_ids = self.mapping_seq(self.utterances, self.slots, lang.slot2id)
         self.intent_ids = self.mapping_lab(self.intents, lang.intent2id)
 
     def __len__(self):

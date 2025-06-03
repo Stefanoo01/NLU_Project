@@ -22,8 +22,7 @@ config = {
 
     # Training control
     'clip': 5,          # Gradient norm clipping at 0.25
-    'runs': 5,          # Run 5 times
-    'n_epochs': 100,        # Train up to 100 epochs
+    'n_epochs': 2,        # Train up to 100 epochs
     'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
 }
 
@@ -49,9 +48,9 @@ if __name__ == "__main__":
         lang.intent2id = saving_object['intent2id']
 
     # Create datasets
-    train_dataset = IntentsAndSlots(train_raw, lang)
-    dev_dataset = IntentsAndSlots(dev_raw, lang)
-    test_dataset = IntentsAndSlots(test_raw, lang)
+    train_dataset = IntentsAndSlots(train_raw, lang, TOKENIZER)
+    dev_dataset = IntentsAndSlots(dev_raw, lang, TOKENIZER)
+    test_dataset = IntentsAndSlots(test_raw, lang, TOKENIZER)
 
     # Dataloader instantiations
     train_loader = DataLoader(train_dataset, batch_size=128, collate_fn=collate_fn,  shuffle=True)
@@ -79,11 +78,11 @@ if __name__ == "__main__":
     else:
         best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang)
         
-        print('Slot F1 score', round(history["slot_f1_scores"].mean(),3), '+-', round(history["slot_f1_scores"].std(),3))
-        print('Intent Accuracy', round(history["intent_accuracies"].mean(), 3), '+-', round(history["intent_accuracies"].std(), 3))
+        print('Slot F1 score:', history['slot_f1_score'])
+        print('Intent Accuracy:', history['intent_accuracy'])
 
         if SAVE_MODEL:
-            saving_object = {"epoch": x, 
+            saving_object = {"epoch": 0, 
                         "model": model.state_dict(), 
                         "optimizer": optimizer.state_dict(), 
                         "w2id": lang.word2id, 
@@ -100,7 +99,7 @@ if __name__ == "__main__":
             }
             extract_report_data(results, os.path.join(result_path, "result.json"))
             plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
-            saving_object = {"epoch": x, 
+            saving_object = {"epoch": 0, 
                         "model": model.state_dict(), 
                         "optimizer": optimizer.state_dict(), 
                         "w2id": lang.word2id, 

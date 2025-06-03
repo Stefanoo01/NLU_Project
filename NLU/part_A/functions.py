@@ -206,7 +206,6 @@ def extract_report_data(results, output_path):
         
         # Training parameters
         "learning_rate": config['lr'],
-        "gamma": config['gamma'],
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
