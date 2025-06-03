@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import os
 import torch.optim as optim
 from transformers import BertTokenizer, BertConfig
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 TEST_MODEL = False
 SAVE_MODEL = False
@@ -15,15 +16,15 @@ TOKENIZER = BertTokenizer.from_pretrained('bert-base-uncased')
 
 config = {
     # Optimizer
-    'lr': 0.0001,            # A good default for AdamW on PTB
+    'lr': 3e-5,            # A good default for AdamW on PTB
 
     # Dropout
-    'dropout': 0.5,    
+    'dropout': 0.2,
 
     # Training control
-    'clip': 5,          # Gradient norm clipping at 0.25
-    'n_epochs': 2,        # Train up to 100 epochs
-    'patience': 5,         # Early stop if dev PPL doesn’t improve for 5 epochs
+    'clip': 1,          # Gradient norm clipping at 0.25
+    'n_epochs': 50,        # Train up to 100 epochs
+    'patience': 3,         # Early stop if dev PPL doesn’t improve for 5 epochs
 }
 
 if __name__ == "__main__":
@@ -65,7 +66,14 @@ if __name__ == "__main__":
 
     model = ModelBERT(bert_config, out_slot, out_int, dropout=config["dropout"]).to(DEVICE)
 
-    optimizer = optim.Adam(model.parameters(), lr=config["lr"])
+    optimizer = AdamW(model.parameters(), lr=config["lr"], weight_decay=0.01)
+    total_steps = len(train_loader) * config["n_epochs"]
+    warmup_steps = int(0.1 * total_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps,
+    )
     criterion_slots = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
     criterion_intents = nn.CrossEntropyLoss()
 
@@ -76,7 +84,7 @@ if __name__ == "__main__":
         print('Intent Accuracy:', intent_test['accuracy'])
 
     else:
-        best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang)
+        best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, scheduler, lang)
         
         print('Slot F1 score:', history['slot_f1_score'])
         print('Intent Accuracy:', history['intent_accuracy'])

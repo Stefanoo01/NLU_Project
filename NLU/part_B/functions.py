@@ -31,7 +31,7 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
-def train_loop(data, optimizer, criterion_slots, criterion_intents, model, clip=5):
+def train_loop(data, optimizer, criterion_slots, criterion_intents, model, scheduler, clip=5):
     model.train()
     loss_array = []
     for sample in data:
@@ -45,9 +45,10 @@ def train_loop(data, optimizer, criterion_slots, criterion_intents, model, clip=
         # clip the gradient to avoid exploding gradients
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)  
         optimizer.step() # Update the weights
+        scheduler.step()
     return loss_array
 
-def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang):
+def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, scheduler, lang):
     best_model = copy.deepcopy(model).to()
     best_epoch = -1
     patience = config["patience"]
@@ -59,7 +60,7 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
     losses_dev = []
 
     for epoch in tqdm(range(1, config["n_epochs"])):
-        loss = train_loop(train_loader, optimizer, criterion_slots, criterion_intents, model, clip=config["clip"])
+        loss = train_loop(train_loader, optimizer, criterion_slots, criterion_intents, model, scheduler, clip=config["clip"])
             
         if epoch % 1 == 0:
             sampled_epochs.append(epoch)
