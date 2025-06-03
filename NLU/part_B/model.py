@@ -1,36 +1,36 @@
-import torch
 import torch.nn as nn
+import torch
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel
 
-class JointBERT(nn.Module):
-    def __init__(self, slot_size, intent_size, dropout_rate=0.1, pretrained_model_name="bert-base-uncased"):
-        super(JointBERT, self).__init__()
-        self.bert = BertModel.from_pretrained(pretrained_model_name)
-        hidden_size = self.bert.config.hidden_size
+class ModelBERT(nn.Module):
 
-        self.dropout = nn.Dropout(dropout_rate)
+    def __init__(self, out_slot, out_int, dropout=0.5):
+        super(ModelBERT, self).__init__()
+        
+        self.num_intents = out_int
+        self.num_slots = out_slot
 
-        # Slot filling head (token-level)
-        self.slot_classifier = nn.Linear(hidden_size, slot_size)
+        self.bert = BertModel(config)
 
-        # Intent classification head (sentence-level, [CLS] token)
-        self.intent_classifier = nn.Linear(hidden_size, intent_size)
-
-    def forward(self, input_ids, attention_mask=None, token_type_ids=None):
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            return_dict=True
-        )
-
-        sequence_output = self.dropout(outputs.last_hidden_state)  # (B, T, H)
-        pooled_output = self.dropout(outputs.pooler_output)        # (B, H)
-
-        # Slot predictions (B, T, slot_size)
-        slot_logits = self.slot_classifier(sequence_output)
-
-        # Intent prediction (B, intent_size)
-        intent_logits = self.intent_classifier(pooled_output)
-
-        return slot_logits.permute(0, 2, 1), intent_logits
+        self.slot_out = nn.Linear(config.hidden_size, out_slot)
+        self.intent_out = nn.Linear(config.hidden_size, out_int)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, attention_mask, token_type_ids, input_ids):
+        bert_output = self.bert(attention_mask=attention_mask, token_type_ids=token_type_ids, input_ids=input_ids)
+        last_hidden_states = bert_out.last_hidden_state
+        pooler_output = bert_out.pooler_output
+        
+        dropout_slots = self.dropout(last_hidden_states)
+        dropout_intent = self.dropout(pooler_output)
+        
+        # Compute slot logits
+        slots = self.slot_out(dropout_slots)
+        # Compute intent logits
+        intent = self.intent_out(dropout_intent)
+        
+        # Slot size: batch_size, seq_len, classes 
+        slots = slots.permute(0,2,1)
+        # Slot size: batch_size, classes, seq_len
+        return slots, intent
