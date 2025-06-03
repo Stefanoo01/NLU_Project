@@ -1,116 +1,132 @@
-from functions import *
-from model import *
-from utils import *
-from torch.utils.data import DataLoader
 import os
+import torch
+import torch.nn as nn
 import torch.optim as optim
-from transformers import BertTokenizer, BertConfig
-from transformers import AdamW, get_linear_schedule_with_warmup
+from torch.utils.data import DataLoader
+
+from utils import load_data, create_dev_set, Lang, ATISDataset, PAD_TOKEN_LABEL
+from model import JointBertForIntentSlot
+from functions import train, eval_loop
 
 TEST_MODEL = False
 SAVE_MODEL = False
 RESULTS = True
 DEVICE = "cuda:0"
 
-TOKENIZER = BertTokenizer.from_pretrained('bert-base-uncased')
-
 config = {
     # Optimizer
-    'lr': 3e-5,            # A good default for AdamW on PTB
-
-    # Dropout
-    'dropout': 0.2,
+    "lr": 2e-5,          # learning rate for AdamW
 
     # Training control
-    'clip': 1,          # Gradient norm clipping at 0.25
-    'n_epochs': 50,        # Train up to 100 epochs
-    'patience': 3,         # Early stop if dev PPL doesn’t improve for 5 epochs
+    "runs": 5,           # number of times to repeat entire train/dev/test cycle
+    "n_epochs": 100,      # maximum epochs per run
+    "patience": 3,       # early stopping patience (in epochs)
+
+    # Data / batching
+    "batch_size": 32,
+    "max_len": 128,      # max token length for BERT
 }
 
 if __name__ == "__main__":
     path = os.path.dirname(os.path.abspath(__file__))
 
-    tmp_train_raw = load_data(os.path.join(path, 'dataset','ATIS','train.json'))
-    test_raw = load_data(os.path.join(path, 'dataset','ATIS','test.json'))
-    train_raw, dev_raw = create_dev_set(tmp_train_raw, test_raw, portion=0.1)
-    y_test = [x['intent'] for x in test_raw]
+    # 1) Load raw JSON
+    full_train = load_data(os.path.join(path, "dataset", "ATIS", "train.json"))
+    full_test  = load_data(os.path.join(path, "dataset", "ATIS", "test.json"))
 
-    words = sum([x['utterance'].split() for x in train_raw], [])
-    corpus = train_raw + dev_raw + test_raw 
-    slots = set(sum([line['slots'].split() for line in corpus],[]))
-    intents = set([line['intent'] for line in corpus])
+    # 2) Create a dev split from full_train (stratified by intent)
+    train_raw, dev_raw = create_dev_set(full_train, full_test, portion=0.1)
 
-    lang = Lang(words, intents, slots, cutoff=0)
+    # 3) Build Lang (for mapping intent/slot strings to IDs)
+    words = sum([ex["utterance"].split() for ex in train_raw], [])
+    corpus = train_raw + dev_raw + full_test
+    slot_tags = sum([ex["slots"].split()   for ex in corpus], [])
+    intents   = [ex["intent"]             for ex in corpus]
+    lang = Lang(words, set(intents), set(slot_tags), cutoff=0)
 
+    # 4) If TEST_MODEL=True, load saved mappings and model state (skipped otherwise)
     if TEST_MODEL:
-        saving_object = torch.load(os.path.join(path, "model.pt"))
-        lang.word2id = saving_object['w2id']
-        lang.slot2id = saving_object['slot2id']
-        lang.intent2id = saving_object['intent2id']
+        saved = torch.load(os.path.join(path, "model.pt"))
+        lang.word2id   = saved["w2id"]
+        lang.slot2id   = saved["slot2id"]
+        lang.intent2id = saved["intent2id"]
 
-    # Create datasets
-    train_dataset = IntentsAndSlots(train_raw, lang, TOKENIZER)
-    dev_dataset = IntentsAndSlots(dev_raw, lang, TOKENIZER)
-    test_dataset = IntentsAndSlots(test_raw, lang, TOKENIZER)
+    # 5) Wrap datasets with ATISDataset (BERT tokenizer + slot alignment)
+    train_dataset = ATISDataset(train_raw, lang, max_len=config["max_len"])
+    dev_dataset   = ATISDataset(dev_raw,   lang, max_len=config["max_len"])
+    test_dataset  = ATISDataset(full_test, lang, max_len=config["max_len"])
 
-    # Dataloader instantiations
-    train_loader = DataLoader(train_dataset, batch_size=128, collate_fn=collate_fn,  shuffle=True)
-    dev_loader = DataLoader(dev_dataset, batch_size=64, collate_fn=collate_fn)
-    test_loader = DataLoader(test_dataset, batch_size=64, collate_fn=collate_fn)
-
-    out_slot = len(lang.slot2id)
-    out_int = len(lang.intent2id)
-    vocab_len = len(lang.word2id)
-
-    bert_config = BertConfig.from_pretrained('bert-base-uncased')
-
-    model = ModelBERT(bert_config, out_slot, out_int, dropout=config["dropout"]).to(DEVICE)
-
-    optimizer = AdamW(model.parameters(), lr=config["lr"], weight_decay=0.01)
-    total_steps = len(train_loader) * config["n_epochs"]
-    warmup_steps = int(0.1 * total_steps)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=warmup_steps,
-        num_training_steps=total_steps,
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"],
+        shuffle=True
     )
-    criterion_slots = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
+    dev_loader = DataLoader(
+        dev_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False
+    )
+
+    # 6) Instantiate model
+    num_intents = len(lang.intent2id)
+    num_slots   = len(lang.slot2id)
+    model = JointBertForIntentSlot(
+        pretrained_model_name="bert-base-uncased",
+        num_intent_labels=num_intents,
+        num_slot_labels=num_slots,
+        dropout_prob=0.1
+    ).to(DEVICE)
+
+    # 7) Optimizer + loss functions
+    optimizer = optim.AdamW(model.parameters(), lr=config["lr"])
+    criterion_slots   = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_LABEL)
     criterion_intents = nn.CrossEntropyLoss()
 
     if TEST_MODEL:
-        model.load_state_dict(saving_object['model'])
-        results_test, intent_test, _ = eval_loop(test_loader, criterion_slots, criterion_intents, model, lang)
-        print('Slot F1 score:', results_test['total']['f'])
-        print('Intent Accuracy:', intent_test['accuracy'])
-
+        # If you want to load a saved model and evaluate on test set:
+        model.load_state_dict(saved["model"])
+        test_metrics = eval_loop(
+            test_loader,
+            model,
+            criterion_slots,
+            criterion_intents,
+            DEVICE
+        )
+        print(f"Slot F1 on Test: {test_metrics['slot_f1']:.4f}")
+        print(f"Intent Accuracy on Test: {test_metrics['intent_acc']:.4f}")
     else:
-        best_model, history = train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, scheduler, lang)
-        
-        print('Slot F1 score:', history['slot_f1_score'])
-        print('Intent Accuracy:', history['intent_accuracy'])
+        # 8) Full training with early stopping + multiple runs
+        best_model, results = train(
+            model,
+            config,
+            train_loader,
+            dev_loader,
+            test_loader,
+            criterion_slots,
+            criterion_intents,
+            optimizer,
+            DEVICE
+        )
+
+        # 9) Print aggregated results
+        print(f"Slot F1  →  mean: {results['mean_slot_f1_score']:.4f}  ±  {results['std_slot_f1_score']:.4f}")
+        print(f"Intent Acc  →  mean: {results['mean_intent_accuracy']:.4f}  ±  {results['std_intent_accuracy']:.4f}")
 
         if SAVE_MODEL:
-            saving_object = {"epoch": 0, 
-                        "model": model.state_dict(), 
-                        "optimizer": optimizer.state_dict(), 
-                        "w2id": lang.word2id, 
-                        "slot2id": lang.slot2id, 
-                        "intent2id": lang.intent2id}
-            torch.save(saving_object, os.path.join(path, "model.pt"))
-
-        if RESULTS:
-            result_path = os.path.join(path, create_folder())
-            results = {
-                'config': config,
-                'history': history,
-                'best_epoch': history["best_epoch"],
+            os.makedirs(os.path.join(path, "checkpoint"), exist_ok=True)
+            # Save model state, optimizer state, and mappings
+            to_save = {
+                "model": best_model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "w2id": lang.word2id,
+                "slot2id": lang.slot2id,
+                "intent2id": lang.intent2id,
             }
-            extract_report_data(results, os.path.join(result_path, "result.json"))
-            plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
-            saving_object = {"epoch": 0, 
-                        "model": model.state_dict(), 
-                        "optimizer": optimizer.state_dict(), 
-                        "w2id": lang.word2id, 
-                        "slot2id": lang.slot2id, 
-                        "intent2id": lang.intent2id}
-            torch.save(saving_object, os.path.join(result_path, "model.pt"))
+            torch.save(to_save, os.path.join(path, "checkpoint", "model.pt"))
+
+        # (Optional) You could save `results` dict to disk here or plot curves if desired
