@@ -14,11 +14,11 @@ DEVICE = "cuda:0"
 
 config = {
     # Optimizer
-    "lr": 2e-5,          # learning rate for AdamW
+    "lr": 2e-5,         
 
     # Training control
-    "n_epochs": 100,      # maximum epochs per run
-    "patience": 3,       # early stopping patience (in epochs)
+    "n_epochs": 100,     
+    "patience": 3,     
 
     # Data / batching
     "batch_size": 32,
@@ -28,28 +28,28 @@ config = {
 if __name__ == "__main__":
     path = os.path.dirname(os.path.abspath(__file__))
 
-    # 1) Load raw JSON
+    # Load raw JSON
     full_train = load_data(os.path.join(path, "dataset", "ATIS", "train.json"))
     full_test  = load_data(os.path.join(path, "dataset", "ATIS", "test.json"))
 
-    # 2) Create a dev split from full_train (stratified by intent)
+    # Create a dev split from full_train (stratified by intent)
     train_raw, dev_raw = create_dev_set(full_train, full_test, portion=0.1)
 
-    # 3) Build Lang (for mapping intent/slot strings to IDs)
+    # Build Lang (for mapping intent/slot strings to IDs)
     words = sum([ex["utterance"].split() for ex in train_raw], [])
     corpus = train_raw + dev_raw + full_test
     slot_tags = sum([ex["slots"].split()   for ex in corpus], [])
     intents   = [ex["intent"]             for ex in corpus]
     lang = Lang(words, set(intents), set(slot_tags), cutoff=0)
 
-    # 4) If TEST_MODEL=True, load saved mappings and model state (skipped otherwise)
     if TEST_MODEL:
+        # Load saved mappings and model state
         saved = torch.load(os.path.join(path, "model.pt"))
         lang.word2id   = saved["w2id"]
         lang.slot2id   = saved["slot2id"]
         lang.intent2id = saved["intent2id"]
 
-    # 5) Wrap datasets with ATISDataset (BERT tokenizer + slot alignment)
+    # Wrap datasets with ATISDataset (BERT tokenizer + slot alignment)
     train_dataset = ATISDataset(train_raw, lang, max_len=config["max_len"])
     dev_dataset   = ATISDataset(dev_raw,   lang, max_len=config["max_len"])
     test_dataset  = ATISDataset(full_test, lang, max_len=config["max_len"])
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         shuffle=False
     )
 
-    # 6) Instantiate model
+    # Instantiate model
     num_intents = len(lang.intent2id)
     num_slots   = len(lang.slot2id)
     model = JointBertForIntentSlot(
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         dropout_prob=0.1
     ).to(DEVICE)
 
-    # 7) Optimizer + loss functions
+    # Optimizer + loss functions
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"])
     criterion_slots   = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_LABEL)
     criterion_intents = nn.CrossEntropyLoss()
@@ -99,7 +99,7 @@ if __name__ == "__main__":
         print(f"Slot F1 on Test: {test_metrics['slot_f1']:.4f}")
         print(f"Intent Accuracy on Test: {test_metrics['intent_acc']:.4f}")
     else:
-        # 8) Full training with early stopping + multiple runs
+        # Full training with early stopping
         best_model, history = train(
             model,
             config,
@@ -113,7 +113,7 @@ if __name__ == "__main__":
             lang
         )
 
-        # 9) Print aggregated results
+        # Print aggregated results
         print(f"Slot F1: {history['slot_f1_score']}")
         print(f"Intent Acc: {history['intent_accuracy']}")
 
@@ -130,6 +130,7 @@ if __name__ == "__main__":
             torch.save(to_save, os.path.join(path, "checkpoint", "model.pt"))
         
         if RESULTS:
+            # Save results
             result_path = os.path.join(path, create_folder())
             results = {
                 'config': config,

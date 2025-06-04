@@ -184,7 +184,6 @@ def extract_report_data(results, output_path):
     report_data = {
         "embedding_size": config['emb_size'],
         "hidden_size": config['hid_size'],
-        "num_layers": config['n_layers'],
         "dropout": config['dropout'],
         "emb_dropout": config['emb_dropout'] if config['dropout'] else 'None',
         "out_dropout": config['out_dropout'] if config['dropout'] else 'None',
