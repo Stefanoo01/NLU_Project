@@ -30,6 +30,7 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
+
 def train_loop(train_loader, model, optimizer, criterion_slots, criterion_intents, device):
     """
     Single epoch training loop for BERT joint model.
@@ -37,193 +38,206 @@ def train_loop(train_loader, model, optimizer, criterion_slots, criterion_intent
     model.train()
     total_loss = 0.0
     for batch in train_loader:
+        # Zero gradients
         optimizer.zero_grad()
 
+        # Move inputs to device
         input_ids      = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         token_type_ids = batch["token_type_ids"].to(device)
-        slot_labels    = batch["slot_labels"].to(device)         # [batch, max_len]
+        slot_labels    = batch["slot_labels"].to(device)          # [batch, max_len]
         intent_labels  = batch["intent_label"].view(-1).to(device)  # [batch]
 
+        # Forward pass
         intent_logits, slot_logits = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids
         )
+        # intent_logits: [batch, num_intents]
+        # slot_logits:   [batch, max_len, num_slots]
 
-        # Slot loss
+        # Compute slot loss (ignore -100)
         num_slots = slot_logits.size(-1)
         slot_loss = criterion_slots(
             slot_logits.view(-1, num_slots),
             slot_labels.view(-1)
         )
 
-        # Intent loss
+        # Compute intent loss
         intent_loss = criterion_intents(intent_logits, intent_labels)
 
         loss = slot_loss + intent_loss
         total_loss += loss.item()
 
+        # Backward and optimize
         loss.backward()
         optimizer.step()
 
-    return total_loss / len(train_loader)
+    avg_loss = total_loss / len(train_loader)
+    return avg_loss
 
 
-def eval_loop(eval_loader, model, criterion_slots, criterion_intents, device):
+def eval_loop(data_loader, model, criterion_slots, criterion_intents, device, lang):
     """
-    Evaluation loop for a single split.
-    Returns:
-      - slot_f1 (micro over all valid sub-token positions),
-      - intent_acc,
-      - average loss,
-      - a detailed intent classification report (dict).
+    Batch‐based evaluation that returns:
+      - eval_loss : average (intent + slot) loss over all batches
+      - slot_f1   : token‐level F1 from conll.evaluate
+      - intent_acc: accuracy from sklearn classification_report
     """
     model.eval()
     total_loss = 0.0
+    nb_batches = 0
 
     all_intent_preds = []
-    all_intent_trues = []
-    all_slot_preds   = []
-    all_slot_trues   = []
+    all_intent_labels = []
+
+    ref_slots = []
+    hyp_slots = []
 
     with torch.no_grad():
-        for batch in eval_loader:
+        for batch in data_loader:
             input_ids      = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             token_type_ids = batch["token_type_ids"].to(device)
-            slot_labels    = batch["slot_labels"].to(device)       # [batch, max_len]
+            slot_labels    = batch["slot_labels"].to(device)      # [batch, max_len]
             intent_labels  = batch["intent_label"].view(-1).to(device)  # [batch]
 
+            # Forward pass
             intent_logits, slot_logits = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids
             )
 
+            # Compute losses
+            loss_intent = criterion_intents(intent_logits, intent_labels)
             num_slots = slot_logits.size(-1)
-            slot_loss = criterion_slots(
+            loss_slot = criterion_slots(
                 slot_logits.view(-1, num_slots),
                 slot_labels.view(-1)
             )
-            intent_loss = criterion_intents(intent_logits, intent_labels)
-            loss = slot_loss + intent_loss
+            loss = loss_intent + loss_slot
+
             total_loss += loss.item()
+            nb_batches += 1
 
-            # Intent predictions/trues
+            # Intent predictions
             intent_preds = torch.argmax(intent_logits, dim=1).cpu().tolist()
-            intent_trues = intent_labels.cpu().tolist()
+            intent_labels_cpu = intent_labels.cpu().tolist()
             all_intent_preds.extend(intent_preds)
-            all_intent_trues.extend(intent_trues)
+            all_intent_labels.extend(intent_labels_cpu)
 
-            # Slot predictions/trues
-            slot_preds = torch.argmax(slot_logits, dim=-1).cpu().numpy()  # [batch, max_len]
-            slot_trues = slot_labels.cpu().numpy()                         # [batch, max_len]
+            # Slot predictions
+            slot_preds    = torch.argmax(slot_logits, dim=2)  # [batch, max_len]
+            slot_pred_seqs = slot_preds.cpu().tolist()
+            slot_gold_seqs = slot_labels.cpu().tolist()
 
-            batch_size, seq_len = slot_trues.shape
-            for i in range(batch_size):
-                for j in range(seq_len):
-                    true_label = slot_trues[i, j]
-                    if true_label != -100:  # ignore padded / subtokens
-                        all_slot_trues.append(true_label)
-                        all_slot_preds.append(int(slot_preds[i, j]))
+            for i in range(len(slot_pred_seqs)):
+                gold_seq = slot_gold_seqs[i]
+                pred_seq = slot_pred_seqs[i]
+                current_ref = []
+                current_hyp = []
+                for g_id, p_id in zip(gold_seq, pred_seq):
+                    if g_id != -100:
+                        gold_tag = lang.id2slot[g_id]
+                        pred_tag = lang.id2slot[p_id]
+                        current_ref.append(("w", gold_tag))
+                        current_hyp.append(("w", pred_tag))
+                ref_slots.append(current_ref)
+                hyp_slots.append(current_hyp)
 
-    intent_acc = accuracy_score(all_intent_trues, all_intent_preds)
-    slot_f1    = f1_score(all_slot_trues, all_slot_preds, average="micro")
-    avg_loss   = total_loss / len(eval_loader)
+    # Average loss
+    avg_loss = total_loss / nb_batches if nb_batches else 0.0
 
-    return {
-        "slot_f1": slot_f1,
-        "intent_acc": intent_acc,
-        "eval_loss": avg_loss,
-        # we return a full classification report if you need it later
-        "intent_report": classification_report(
-            all_intent_trues, all_intent_preds, zero_division=False, output_dict=True
-        )
-    }
+    # conll.evaluate → token‐level F1
+    try:
+        slot_results = evaluate(ref_slots, hyp_slots)
+        slot_f1 = slot_results["total"]["f"]
+    except Exception as ex:
+        print("Warning in conll.evaluate:", ex)
+        slot_f1 = 0.0
+
+    # Intent accuracy
+    report_intent = classification_report(
+        [lang.id2intent[l] for l in all_intent_labels],
+        [lang.id2intent[p] for p in all_intent_preds],
+        zero_division=False,
+        output_dict=True
+    )
+    intent_acc = report_intent.get("accuracy", 0.0)
+
+    return {"eval_loss": avg_loss, "slot_f1": slot_f1, "intent_acc": intent_acc}
 
 
-def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, device):
+def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, device, lang):
     """
     Full training routine with early stopping on Dev slot_f1.
-    Tracks per-epoch Dev slot_f1 & Dev intent_acc for the *best* run, 
-    and final Test slot_f1 & Test intent_acc. Returns:
-      - best_model           : model state after early stopping on Dev
-      - record_dict          : dictionary containing
-          * "dev_f1_per_epoch":  list of Dev slot_f1 per epoch (for best run)
-          * "dev_acc_per_epoch": list of Dev intent_acc per epoch (for best run)
-          * "test_f1"          : Test slot_f1 (for best run)
-          * "test_acc"         : Test intent_acc (for best run)
-          * "train_loss_history": list of training loss per epoch (for best run)
-          * "dev_loss_history":   list of Dev loss per epoch (for best run)
-          * "best_epoch"       : epoch number at which Dev slot_f1 peaked
     """
-    # We’ll keep track of “best run” metrics here
-    best_run_record = None
-    best_overall_dev_f1 = -1.0
+    model.train()
+    best_dev_f1 = -1.0
+    best_model_wts = None
+    patience_ctr = config["patience"]
 
-    for run in range(config["runs"]):
-        model.train()
-        best_dev_f1    = -1.0
-        best_model_wts = None
-        patience_ctr   = config["patience"]
+    sampled_epochs = []
+    train_loss_hist = []
+    dev_loss_hist = []
+    dev_f1_hist = []
+    dev_acc_hist = []
 
-        train_loss_hist = []
-        dev_loss_hist   = []
-        dev_f1_hist     = []
-        dev_acc_hist    = []
+    epoch_bar = tqdm(range(1, config["n_epochs"] + 1), unit="epoch")
+    for epoch in epoch_bar:
+        sampled_epochs.append(epoch)
+        # 1) Train one epoch
+        train_loss = train_loop(train_loader, model, optimizer, criterion_slots, criterion_intents, device)
+        train_loss_hist.append(train_loss)
 
-        for epoch in range(1, config["n_epochs"] + 1):
-            # 1) Train one epoch
-            train_loss = train_loop(train_loader, model, optimizer, criterion_slots, criterion_intents, device)
-            train_loss_hist.append(train_loss)
+        # 2) Evaluate on Dev
+        dev_metrics = eval_loop(dev_loader, model, criterion_slots, criterion_intents, device, lang)
+        dev_loss = dev_metrics["eval_loss"]
+        dev_f1 = dev_metrics["slot_f1"]
+        dev_acc = dev_metrics["intent_acc"]
 
-            # 2) Evaluate on Dev
-            dev_metrics = eval_loop(dev_loader, model, criterion_slots, criterion_intents, device)
-            dev_loss     = dev_metrics["eval_loss"]
-            dev_f1       = dev_metrics["slot_f1"]
-            dev_acc      = dev_metrics["intent_acc"]
+        dev_loss_hist.append(dev_loss)
+        dev_f1_hist.append(dev_f1)
+        dev_acc_hist.append(dev_acc)
 
-            dev_loss_hist.append(dev_loss)
-            dev_f1_hist.append(dev_f1)
-            dev_acc_hist.append(dev_acc)
+        epoch_bar.set_description(
+            f"Epoch {epoch}/{config['n_epochs']} | Dev_F1: {dev_f1:.4f} | Dev_Acc: {dev_acc:.4f}"
+        )
 
-            # 3) Early stopping check based on Dev slot_f1
-            if dev_f1 > best_dev_f1:
-                best_dev_f1 = dev_f1
-                best_model_wts = model.state_dict()
-                best_epoch_for_this_run = epoch
-                patience_ctr = config["patience"]
-            else:
-                patience_ctr -= 1
+        # 3) Early stopping check based on Dev slot_f1
+        if dev_f1 > best_dev_f1:
+            best_dev_f1 = dev_f1
+            best_model_wts = model.state_dict()
+            best_epoch_for_this_run = epoch
+            patience_ctr = config["patience"]
+        else:
+            patience_ctr -= 1
 
-            if patience_ctr <= 0:
-                break
+        if patience_ctr <= 0:
+            break
 
-        # 4) Load best weights for this run
-        model.load_state_dict(best_model_wts)
-
-        # 5) Evaluate on Test set
-        test_metrics = eval_loop(test_loader, model, criterion_slots, criterion_intents, device)
-        test_f1  = test_metrics["slot_f1"]
-        test_acc = test_metrics["intent_acc"]
-
-        # 6) If this run’s Dev-F1 is the highest across all runs, save its record
-        if best_dev_f1 > best_overall_dev_f1:
-            best_overall_dev_f1 = best_dev_f1
-            best_run_record = {
-                "train_loss_history": train_loss_hist,
-                "dev_loss_history":   dev_loss_hist,
-                "dev_f1_per_epoch":   dev_f1_hist,
-                "dev_acc_per_epoch":  dev_acc_hist,
-                "best_epoch":         best_epoch_for_this_run,
-                "test_f1":            test_f1,
-                "test_acc":           test_acc
-            }
-
-    # 7) Return the model (with best weights) and the record of interest
-    # Re-load the best run’s weights (so model is consistent)
+    # 4) Load best weights for this run
     model.load_state_dict(best_model_wts)
+
+    # 5) Evaluate on Test set
+    test_metrics = eval_loop(test_loader, model, criterion_slots, criterion_intents, device, lang)
+    test_f1 = test_metrics["slot_f1"]
+    test_acc = test_metrics["intent_acc"]
+
+    # 6) Build record for this single run
+    best_run_record = {
+        "train_loss": train_loss_hist,
+        "dev_loss": dev_loss_hist,
+        "dev_f1_per_epoch": dev_f1_hist,
+        "dev_acc_per_epoch": dev_acc_hist,
+        "best_epoch": best_epoch_for_this_run,
+        "slot_f1_score": test_f1,
+        "intent_accuracy": test_acc,
+        "epochs": sampled_epochs
+    }
+
     return model, best_run_record
 
 def plot_loss_curves(history, save_path=None):
@@ -269,7 +283,6 @@ def extract_report_data(results, output_path):
     # Compile essential information
     report_data = {
         # Model architecture information
-        "dropout": config['dropout'],
         
         # Training parameters
         "batch_size": config['batch_size'],
@@ -287,8 +300,8 @@ def extract_report_data(results, output_path):
         # Evaluation metrics
         "slot_f1_score": history['slot_f1_score'],
         "intent_accuracy": history['intent_accuracy'],
-        "slot_f1_scores:": history['intent_f1_scores'],
-        "intent_accuracies:": history['intent_accuracies'],
+        "slot_f1_scores:": history['dev_f1_per_epoch'],
+        "intent_accuracies:": history['dev_acc_per_epoch'],
 
         # Epoch data for plotting
         "epochs": history['epochs'],

@@ -3,10 +3,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
 from utils import load_data, create_dev_set, Lang, ATISDataset, PAD_TOKEN_LABEL
 from model import JointBertForIntentSlot
-from functions import train, eval_loop
+from functions import *
 
 TEST_MODEL = False
 SAVE_MODEL = False
@@ -18,7 +17,6 @@ config = {
     "lr": 2e-5,          # learning rate for AdamW
 
     # Training control
-    "runs": 5,           # number of times to repeat entire train/dev/test cycle
     "n_epochs": 100,      # maximum epochs per run
     "patience": 3,       # early stopping patience (in epochs)
 
@@ -95,13 +93,14 @@ if __name__ == "__main__":
             model,
             criterion_slots,
             criterion_intents,
-            DEVICE
+            DEVICE,
+            lang
         )
         print(f"Slot F1 on Test: {test_metrics['slot_f1']:.4f}")
         print(f"Intent Accuracy on Test: {test_metrics['intent_acc']:.4f}")
     else:
         # 8) Full training with early stopping + multiple runs
-        best_model, results = train(
+        best_model, history = train(
             model,
             config,
             train_loader,
@@ -110,12 +109,13 @@ if __name__ == "__main__":
             criterion_slots,
             criterion_intents,
             optimizer,
-            DEVICE
+            DEVICE,
+            lang
         )
 
         # 9) Print aggregated results
-        print(f"Slot F1  →  mean: {results['mean_slot_f1_score']:.4f}  ±  {results['std_slot_f1_score']:.4f}")
-        print(f"Intent Acc  →  mean: {results['mean_intent_accuracy']:.4f}  ±  {results['std_intent_accuracy']:.4f}")
+        print(f"Slot F1: {history['slot_f1_score']}")
+        print(f"Intent Acc: {history['intent_accuracy']}")
 
         if SAVE_MODEL:
             os.makedirs(os.path.join(path, "checkpoint"), exist_ok=True)
@@ -128,5 +128,20 @@ if __name__ == "__main__":
                 "intent2id": lang.intent2id,
             }
             torch.save(to_save, os.path.join(path, "checkpoint", "model.pt"))
-
-        # (Optional) You could save `results` dict to disk here or plot curves if desired
+        
+        if RESULTS:
+            result_path = os.path.join(path, create_folder())
+            results = {
+                'config': config,
+                'history': history,
+                'best_epoch': history["best_epoch"],
+            }
+            extract_report_data(results, os.path.join(result_path, "result.json"))
+            plot_loss_curves(history, os.path.join(result_path, "loss_curves.png"))
+            saving_object = {"epoch": 0, 
+                        "model": model.state_dict(), 
+                        "optimizer": optimizer.state_dict(), 
+                        "w2id": lang.word2id, 
+                        "slot2id": lang.slot2id, 
+                        "intent2id": lang.intent2id}
+            torch.save(saving_object, os.path.join(result_path, "model.pt"))

@@ -29,17 +29,11 @@ def init_weights(mat):
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
 
-def get_optimizer(model, lr=0.1):
-    """
-    Returns an ASGD optimizer (Averaged SGD) with non-monotonic triggering.
-
-    Args:
-        model: the model to optimize
-        lr: learning rate
-        t0: averaging start trigger
-        lambd: decay term
-    """
-    return optim.SGD(model.parameters(), lr=lr)
+def get_optimizer(model, type, lr=0.001, weight_decay=0.01):
+    if type == 'SGD':
+        return optim.SGD(model.parameters(), lr=lr)
+    elif type == 'AdamW':
+        return optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 def train_loop(data, optimizer, criterion, model, clip=5):
     model.train()
@@ -60,29 +54,36 @@ def train_loop(data, optimizer, criterion, model, clip=5):
     return sum(loss_array)/sum(number_of_tokens)
 
 def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer):
+    # Non-monotonic trigger class for switching to ASGD
     class NT_AVSGD_Trigger:
         def __init__(self, non_monotone_n=5):
-            self.logs = []
-            self.t = 0
-            self.T = 0
-            self.non_monotone_n = non_monotone_n
-            self.triggered = False
+            self.logs = []               # Stores past validation losses
+            self.t = 0                   # Current evaluation step
+            self.T = 0                   # Step at which trigger happens
+            self.non_monotone_n = non_monotone_n  # Window size to check non-monotonicity
+            self.triggered = False       # Whether the trigger has already fired
 
         def should_trigger(self, val_metric):
             if self.triggered:
-                return False
+                return False  # Trigger only once
+
+            # Trigger if val_metric is worse than the best of the last N evaluations
             if self.t > self.non_monotone_n and val_metric > min(self.logs[-self.non_monotone_n:]):
                 self.T = self.t
                 self.triggered = True
                 return True
-            self.logs.append(val_metric)
+
+            self.logs.append(val_metric)  # Store the current validation loss
             self.t += 1
             return False
 
+    # Training history tracking
     losses_train = []
     losses_dev = []
     sampled_epochs = []
     ppls = []
+
+    # Early stopping and best model tracking
     best_ppl = math.inf
     best_model = None
     best_epoch = -1
@@ -92,11 +93,14 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
 
     pbar = tqdm(range(1, n_epochs))
     for epoch in pbar:
+        # Train for one epoch
         loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
+
         if epoch % 1 == 0:
             sampled_epochs.append(epoch)
             losses_train.append(np.asarray(loss).mean())
 
+            # If using ASGD, evaluate using averaged weights
             if isinstance(optimizer, optim.ASGD):
                 tmp = {}
                 for prm in model.parameters():
@@ -110,7 +114,10 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                 if hasattr(model, 'lstm') and isinstance(model.lstm, nn.LSTM):
                     model.lstm.flatten_parameters()
             else:
+                # Standard evaluation
                 ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
+
+                # Check for non-monotonic trigger
                 if trigger.should_trigger(loss_dev):
                     print(f"NT-AvSGD TRIGGERED at epoch {epoch}")
                     optimizer = optim.ASGD(model.parameters(), lr=config['lr'], t0=0, lambd=0.)
@@ -123,6 +130,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
 
             improvement = best_ppl - ppl_dev
 
+            # Update best model if improved
             if ppl_dev < best_ppl:
                 best_ppl = ppl_dev
                 best_model = copy.deepcopy(model).to()
@@ -132,6 +140,8 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                     patience -= 1
             else:
                 patience -= 1
+
+            # Stop if no improvement for `patience` epochs
             if patience <= 0:
                 break
 
@@ -160,27 +170,6 @@ def eval_loop(data, eval_criterion, model):
     ppl = math.exp(sum(loss_array) / sum(number_of_tokens))
     loss_to_return = sum(loss_array) / sum(number_of_tokens)
     return ppl, loss_to_return
-
-def plot_loss_curves(history, save_path=None):
-    """
-    Plot training and validation loss curves
-    
-    Args:
-        history: Dictionary containing training history with keys 'epochs', 'train_loss', and 'dev_loss'
-        save_path: Optional path to save the figure
-    """
-    plt.figure(figsize=(10, 6))
-    plt.plot(history["epochs"], history["train_loss"], 'b-', label="Training Loss")
-    plt.plot(history["epochs"], history["dev_loss"], 'r-', label="Validation Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Training and Validation Loss")
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Loss curves saved to {save_path}")
 
 def plot_loss_curves(history, save_path=None):
     """
@@ -235,7 +224,7 @@ def extract_report_data(results, output_path):
     
     Args:
         results: Dictionary containing training results and history
-        model_name: Name of the model (e.g., 'LSTM', 'RNN')
+        output_path: Path to the output file
     
     Returns:
         report_data: Dictionary with essential information for report writing
@@ -260,7 +249,9 @@ def extract_report_data(results, output_path):
         "out_dropout": config['out_dropout'],
         
         # Training parameters
+        'optimizer': config['optimizer'],
         "learning_rate": config['lr'],
+        "weight_decay": config['weight_decay'] if config['optimizer'] == 'AdamW' else 'None',
         "gamma": config['gamma'],
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
@@ -292,15 +283,15 @@ def extract_report_data(results, output_path):
 
 def create_folder():
     base_dir = "results"
-    # 1) Make sure "results" exists
+    # Make sure "results" exists
     os.makedirs(base_dir, exist_ok=True)
 
-    # 2) Find the next available "result_i" name
+    # Find the next available "result_i" name
     i = 1
     while True:
         new_folder = os.path.join(base_dir, f"result_{i}")
         if not os.path.exists(new_folder):
-            # 3) Create and return it
+            # Create and return it
             os.makedirs(new_folder)
             return new_folder
         i += 1

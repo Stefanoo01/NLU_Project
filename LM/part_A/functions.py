@@ -59,30 +59,39 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
     losses_dev = []
     sampled_epochs = []
     ppls = []
-    best_ppl = math.inf
+    best_ppl = math.inf  # Initialize best perplexity as infinity
     best_model = None
     best_epoch = -1
-    patience = config["patience"]
-    pbar = tqdm(range(1,n_epochs))
+    patience = config["patience"]  # Early stopping patience
+    pbar = tqdm(range(1, n_epochs))  # Progress bar for epochs
+
     for epoch in pbar:
-            loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
-            if epoch % 1 == 0:
-                sampled_epochs.append(epoch)
-                losses_train.append(np.asarray(loss).mean())
-                ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
-                losses_dev.append(np.asarray(loss_dev).mean())
-                ppls.append(ppl_dev)
-                pbar.set_description("PPL: %f" % ppl_dev)
-                if  ppl_dev < best_ppl:
-                    best_ppl = ppl_dev
-                    best_model = copy.deepcopy(model).to()
-                    best_epoch = epoch
-                    patience = config["patience"]
-                else:
-                    patience -= 1
-                    
-                if patience <= 0:
-                    break
+        loss = train_loop(train_loader, optimizer, criterion_train, model, config["clip"])
+
+        if epoch % 1 == 0:
+            sampled_epochs.append(epoch)
+            losses_train.append(np.asarray(loss).mean())
+
+            # Evaluate on dev set
+            ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
+            losses_dev.append(np.asarray(loss_dev).mean())
+            ppls.append(ppl_dev)
+
+            # Update progress bar
+            pbar.set_description("PPL: %f" % ppl_dev)
+
+            # Save model if it's the best so far
+            if ppl_dev < best_ppl:
+                best_ppl = ppl_dev
+                best_model = copy.deepcopy(model).to()  # Deep copy the model
+                best_epoch = epoch
+                patience = config["patience"]  # Reset patience
+            else:
+                patience -= 1  # Decrease patience if no improvement
+
+            # Stop if patience is exhausted
+            if patience <= 0:
+                break
 
     return best_model, {
         'epochs': sampled_epochs,
@@ -161,8 +170,7 @@ def extract_report_data(results, output_path):
     Extract essential information needed for writing a report and save to a file.
     Args:
         results: Dictionary containing training results and history
-        model_name: Name of the model (e.g., 'LSTM', 'RNN')
-        output_path: Path to the output file (e.g., 'report_data.json')
+        output_path: Path to the output file
     Returns:
         report_data: Dictionary with essential information for report writing
     """
@@ -182,7 +190,7 @@ def extract_report_data(results, output_path):
         "out_dropout": config['out_dropout'] if config['dropout'] else 'None',
         "optimizer": config['optimizer'],
         "learning_rate": config['lr'],
-        "weight_decay": config['weight_decay'],
+        "weight_decay": config['weight_decay'] if config['optimizer'] == 'AdamW' else 'None', 
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
         "clip": config['clip'],
@@ -205,15 +213,15 @@ def extract_report_data(results, output_path):
 
 def create_folder():
     base_dir = "results"
-    # 1) Make sure "results" exists
+    # Make sure "results" exists
     os.makedirs(base_dir, exist_ok=True)
 
-    # 2) Find the next available "result_i" name
+    # Find the next available "result_i" name
     i = 1
     while True:
         new_folder = os.path.join(base_dir, f"result_{i}")
         if not os.path.exists(new_folder):
-            # 3) Create and return it
+            # Create and return it
             os.makedirs(new_folder)
             return new_folder
         i += 1

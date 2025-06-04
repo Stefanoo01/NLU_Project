@@ -1,8 +1,9 @@
 import json
 import torch
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
+from transformers import BertTokenizerFast as BertTokenizer
 from sklearn.model_selection import train_test_split
+from collections import Counter
 
 DEVICE = "cuda:0"
 PAD_TOKEN_LABEL = -100  # for CrossEntropyLoss(ignore_index=PAD_TOKEN_LABEL)
@@ -35,7 +36,6 @@ class Lang:
     """
     def __init__(self, words, intents, slots, cutoff=0):
         # We don’t really need a word2id for BERT, but we build it anyway in case you want it.
-        from collections import Counter
         self.word2id = self._build_word2id(words, cutoff=cutoff, unk=True)
         self.slot2id = self._build_label2id(slots, pad_label=True)
         self.intent2id = self._build_label2id(intents, pad_label=False)
