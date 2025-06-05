@@ -35,17 +35,17 @@ class JointBertForIntentSlot(nn.Module):
         """
         super(JointBertForIntentSlot, self).__init__()
 
-        # 1) Load pre-trained BERT
+        # Load pre-trained BERT
         self.bert = BertModel.from_pretrained(pretrained_model_name)
         hidden_size = self.bert.config.hidden_size
 
-        # 2) Dropout layer (applied to both pooled_output and sequence_output)
+        # Dropout layer (applied to both pooled_output and sequence_output)
         self.dropout = nn.Dropout(dropout_prob)
 
-        # 3) Intent classification head: from [CLS] → num_intent_labels
+        # Intent classification head: from [CLS] → num_intent_labels
         self.intent_classifier = nn.Linear(hidden_size, num_intent_labels)
 
-        # 4) Slot filling head: from each token’s hidden → num_slot_labels
+        # Slot filling head: from each token’s hidden → num_slot_labels
         self.slot_classifier = nn.Linear(hidden_size, num_slot_labels)
 
         # Initialize the classification heads (weights taken from BERT’s initializer)
@@ -76,7 +76,7 @@ class JointBertForIntentSlot(nn.Module):
             intent_logits: torch.FloatTensor of shape [batch_size, num_intent_labels]
             slot_logits:   torch.FloatTensor of shape [batch_size, seq_len, num_slot_labels]
         """
-        # 1) Pass inputs through BERT
+        # Pass inputs through BERT
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,
@@ -88,14 +88,14 @@ class JointBertForIntentSlot(nn.Module):
         # pooler_output: [batch_size, hidden_size] (i.e. representation for [CLS])
         pooled_output = outputs.pooler_output
 
-        # 2) Apply dropout
+        # Apply dropout
         pooled_output = self.dropout(pooled_output)             # [batch, hidden_size]
         sequence_output = self.dropout(sequence_output)         # [batch, seq_len, hidden_size]
 
-        # 3) Intent prediction (on [CLS])
+        # Intent prediction (on [CLS])
         intent_logits = self.intent_classifier(pooled_output)   # [batch, num_intent_labels]
 
-        # 4) Slot prediction (token‐level)
+        # Slot prediction (token‐level)
         #    slot_logits will be used with CrossEntropyLoss(ignore_index=-100)
         #    so that any “ignored” subtokens (with label -100) do not contribute.
         slot_logits = self.slot_classifier(sequence_output)     # [batch, seq_len, num_slot_labels]

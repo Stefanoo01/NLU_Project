@@ -116,7 +116,7 @@ class ATISDataset(Dataset):
         slot_tags = self.slot_tags[idx]   # e.g. ["O","O","O","O","B-fromloc","I-fromloc"]
         intent_id = self.intent_ids[idx]  # e.g. 3
 
-        # 1) Tokenize with BertTokenizer, keeping track of word→subtoken alignment
+        # Tokenize with BertTokenizer, keeping track of word→subtoken alignment
         #    By passing is_split_into_words=True, tokenizer will know each "words[i]" is one token.
         encoding = self.tokenizer(
             words,
@@ -130,7 +130,7 @@ class ATISDataset(Dataset):
         attention_mask = encoding["attention_mask"].squeeze(0)  # shape [max_len]
         token_type_ids = encoding["token_type_ids"].squeeze(0)  # shape [max_len]
 
-        # 2) Align slot_labels to sub-tokens
+        # Align slot_labels to sub-tokens
         #    encoding.word_ids() gives a list of length max_len, where each entry is:
         #      - None if the token is a special token ([CLS],[SEP], or padding)
         #      - an integer i ∈ [0..len(words)-1] if that sub‐token belongs to words[i]
@@ -153,7 +153,7 @@ class ATISDataset(Dataset):
 
         slot_label_ids = torch.LongTensor(aligned_slot_labels)  # shape [max_len]
 
-        # 3) Package everything in a dict
+        # Package everything in a dict
         return {
             "input_ids":      input_ids.to(DEVICE),
             "attention_mask": attention_mask.to(DEVICE),

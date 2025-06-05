@@ -233,7 +233,7 @@ def extract_report_data(results, output_path):
     config = results["config"]
     history = results["history"]
     best_epoch = results["best_epoch"]
-    best_dev_ppl = results["final_ppl"]
+    test_ppl = results["final_ppl"]
     
     # Calculate training improvement
     train_loss_reduction = ((history["train_loss"][0] - history["train_loss"][-1]) / 
@@ -244,15 +244,14 @@ def extract_report_data(results, output_path):
         # Model architecture information
         "embedding_size": config['emb_size'],
         "hidden_size": config['hid_size'],
-        "num_layers": config['n_layers'],
         "emb_dropout": config['emb_dropout'],
         "out_dropout": config['out_dropout'],
         
         # Training parameters
         'optimizer': config['optimizer'],
         "learning_rate": config['lr'],
+        'learning_rate_starter_optimizer': config['lr_starter'],
         "weight_decay": config['weight_decay'] if config['optimizer'] == 'AdamW' else 'None',
-        "gamma": config['gamma'],
         "gradient_clip": config['clip'],
         "max_epochs": config['n_epochs'],
         "early_stopping_patience": config['patience'],
@@ -267,7 +266,7 @@ def extract_report_data(results, output_path):
         "train_loss_reduction_percent": train_loss_reduction,
         
         # Evaluation metrics
-        "best_validation_ppl": best_dev_ppl,
+        "test_ppl": test_ppl,
         
         # Epoch data for plotting
         "epochs": history['epochs'],

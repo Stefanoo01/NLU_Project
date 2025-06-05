@@ -169,7 +169,6 @@ def eval_loop(data_loader, model, criterion_slots, criterion_intents, device, la
 
     return {"eval_loss": avg_loss, "slot_f1": slot_f1, "intent_acc": intent_acc}
 
-
 def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, device, lang):
     """
     Full training routine with early stopping on Dev slot_f1.
@@ -184,49 +183,50 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
     dev_loss_hist = []
     dev_f1_hist = []
     dev_acc_hist = []
-
+    
     epoch_bar = tqdm(range(1, config["n_epochs"] + 1), unit="epoch")
+    # Training loop
     for epoch in epoch_bar:
         sampled_epochs.append(epoch)
-        # 1) Train one epoch
         train_loss = train_loop(train_loader, model, optimizer, criterion_slots, criterion_intents, device)
         train_loss_hist.append(train_loss)
 
-        # 2) Evaluate on Dev
-        dev_metrics = eval_loop(dev_loader, model, criterion_slots, criterion_intents, device, lang)
-        dev_loss = dev_metrics["eval_loss"]
-        dev_f1 = dev_metrics["slot_f1"]
-        dev_acc = dev_metrics["intent_acc"]
+        # Evaluate on Dev set every epoch
+        if epoch % 1 == 0:
+            dev_metrics = eval_loop(dev_loader, model, criterion_slots, criterion_intents, device, lang)
+            dev_loss = dev_metrics["eval_loss"]
+            dev_f1 = dev_metrics["slot_f1"]
+            dev_acc = dev_metrics["intent_acc"]
 
-        dev_loss_hist.append(dev_loss)
-        dev_f1_hist.append(dev_f1)
-        dev_acc_hist.append(dev_acc)
+            dev_loss_hist.append(dev_loss)
+            dev_f1_hist.append(dev_f1)
+            dev_acc_hist.append(dev_acc)
 
-        epoch_bar.set_description(
-            f"Epoch {epoch}/{config['n_epochs']} | Dev_F1: {dev_f1:.4f} | Dev_Acc: {dev_acc:.4f}"
-        )
+            epoch_bar.set_description(
+                f"Epoch {epoch}/{config['n_epochs']} | Dev_F1: {dev_f1:.4f} | Dev_Acc: {dev_acc:.4f}"
+            )
 
-        # 3) Early stopping check based on Dev slot_f1
-        if dev_f1 > best_dev_f1:
-            best_dev_f1 = dev_f1
-            best_model_wts = model.state_dict()
-            best_epoch_for_this_run = epoch
-            patience_ctr = config["patience"]
-        else:
-            patience_ctr -= 1
+            # Early stopping check based on Dev slot_f1
+            if dev_f1 > best_dev_f1:
+                best_dev_f1 = dev_f1
+                best_model_wts = model.state_dict()
+                best_epoch_for_this_run = epoch
+                patience_ctr = config["patience"]
+            else:
+                patience_ctr -= 1
 
-        if patience_ctr <= 0:
-            break
+            if patience_ctr <= 0:
+                break
 
-    # 4) Load best weights for this run
+    # Load best weights for this run
     model.load_state_dict(best_model_wts)
 
-    # 5) Evaluate on Test set
+    # Evaluate on Test set
     test_metrics = eval_loop(test_loader, model, criterion_slots, criterion_intents, device, lang)
     test_f1 = test_metrics["slot_f1"]
     test_acc = test_metrics["intent_acc"]
 
-    # 6) Build record for this single run
+    # Build record for this single run
     best_run_record = {
         "train_loss": train_loss_hist,
         "dev_loss": dev_loss_hist,
@@ -316,15 +316,15 @@ def extract_report_data(results, output_path):
 
 def create_folder():
     base_dir = "results"
-    # 1) Make sure "results" exists
+    # Make sure "results" exists
     os.makedirs(base_dir, exist_ok=True)
 
-    # 2) Find the next available "result_i" name
+    # Find the next available "result_i" name
     i = 1
     while True:
         new_folder = os.path.join(base_dir, f"result_{i}")
         if not os.path.exists(new_folder):
-            # 3) Create and return it
+            # Create and return it
             os.makedirs(new_folder)
             return new_folder
         i += 1

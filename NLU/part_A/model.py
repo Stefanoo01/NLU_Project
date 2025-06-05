@@ -18,6 +18,7 @@ class ModelIAS(nn.Module):
         self.intent_out = nn.Linear(hid_size * (2 if bidirectional else 1), out_int)
 
         if self.dropout_flag:
+            # Dropout
             self.dropout = nn.Dropout(dropout)
         
     def forward(self, utterance, seq_lengths):
@@ -34,11 +35,14 @@ class ModelIAS(nn.Module):
         utt_encoded, input_sizes = pad_packed_sequence(packed_output, batch_first=True)
 
         if self.utt_encoder.bidirectional:
+            # Concatenate the last hidden states of the forward and backward directions
             last_hidden = torch.cat((last_hidden[-2,:,:], last_hidden[-1,:,:]), dim=1)
         else:
+            # If not bidirectional, just use the last hidden state
             last_hidden = last_hidden[-1,:,:]
 
         if self.dropout_flag:
+            # Apply dropout
             utt_encoded = self.dropout(utt_encoded)
             last_hidden = self.dropout(last_hidden)
         

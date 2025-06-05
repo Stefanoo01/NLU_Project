@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import pickle
 from torch.utils.data import DataLoader
 from utils import load_data, create_dev_set, Lang, ATISDataset, PAD_TOKEN_LABEL
 from model import JointBertForIntentSlot
@@ -44,6 +45,8 @@ if __name__ == "__main__":
 
     if TEST_MODEL:
         # Load saved mappings and model state
+        with open(os.path.join(path, "checkpoint", "lang.pkl"), "rb") as f:
+            lang = pickle.load(f)
         saved = torch.load(os.path.join(path, "model.pt"))
         lang.word2id   = saved["w2id"]
         lang.slot2id   = saved["slot2id"]
@@ -128,6 +131,9 @@ if __name__ == "__main__":
                 "intent2id": lang.intent2id,
             }
             torch.save(to_save, os.path.join(path, "checkpoint", "model.pt"))
+            # Save Lang object
+            with open(os.path.join(path, "checkpoint", "lang.pkl"), "wb") as f:
+                pickle.dump(lang, f)
         
         if RESULTS:
             # Save results
@@ -146,3 +152,5 @@ if __name__ == "__main__":
                         "slot2id": lang.slot2id, 
                         "intent2id": lang.intent2id}
             torch.save(saving_object, os.path.join(result_path, "model.pt"))
+            with open(os.path.join(path, "checkpoint", "lang.pkl"), "wb") as f:
+                pickle.dump(lang, f)

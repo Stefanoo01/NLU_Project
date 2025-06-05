@@ -176,7 +176,7 @@ def extract_report_data(results, output_path):
     """
     config = results["config"]
     history = results["history"]
-    best_dev_ppl = results["final_ppl"]
+    test_ppl = results["final_ppl"]
 
     train_loss_reduction = ((history["train_loss"][0] - history["train_loss"][-1]) /
                             history["train_loss"][0] * 100)
@@ -198,7 +198,7 @@ def extract_report_data(results, output_path):
         "initial_train_loss": history['train_loss'][0],
         "final_train_loss": history['train_loss'][-1],
         "train_loss_reduction_percent": train_loss_reduction,
-        "best_validation_ppl": best_dev_ppl,
+        "test_ppl": test_ppl,
         "epochs": history['epochs'],
         "train_loss_history": history['train_loss'],
         "dev_loss_history": history['dev_loss'],

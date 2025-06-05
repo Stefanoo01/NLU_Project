@@ -50,6 +50,7 @@ def train_loop(data, optimizer, criterion_slots, criterion_intents, model, clip=
 def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang):
     slot_f1s, intent_accs = [], []
 
+   # Run multiple times 
     for _ in tqdm(range(config["runs"])):
         patience = config["patience"]
         best_f1 = 0
@@ -59,9 +60,11 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         losses_dev = []
         sampled_epochs = []
 
+        # Training loop
         for epoch in tqdm(range(1, config["n_epochs"] + 1), leave=False, desc=f"F1: {f1 if epoch != 0 else 0}"):
             loss = train_loop(train_loader, optimizer, criterion_slots, criterion_intents, model)
             
+            # Evaluate on dev
             if epoch % 5 == 0:
                 sampled_epochs.append(epoch)
                 losses_train.append(np.asarray(loss).mean())
@@ -72,6 +75,7 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
                 losses_dev.append(np.asarray(loss_dev).mean())
                 
                 f1 = results_dev["total"]["f"]
+                # Early stopping
                 if f1 > best_f1:
                     best_f1 = f1
                     best_model = copy.deepcopy(model).to()
@@ -90,6 +94,7 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         slot_f1s.append(results_test["total"]["f"])
         intent_accs.append(intent_test["accuracy"])
 
+    # Return the best model and its evaluation results
     return best_model, {
         "slot_f1_scores": np.asarray(slot_f1s),
         "intent_accuracies": np.asarray(intent_accs),
@@ -183,6 +188,7 @@ def extract_report_data(results, output_path):
     
     Args:
         results: Dictionary containing training results and history
+        output_path: Path to save the extracted report data
     
     Returns:
         report_data: Dictionary with essential information for report writing
@@ -237,15 +243,15 @@ def extract_report_data(results, output_path):
 
 def create_folder():
     base_dir = "results"
-    # 1) Make sure "results" exists
+    # Make sure "results" exists
     os.makedirs(base_dir, exist_ok=True)
 
-    # 2) Find the next available "result_i" name
+    # Find the next available "result_i" name
     i = 1
     while True:
         new_folder = os.path.join(base_dir, f"result_{i}")
         if not os.path.exists(new_folder):
-            # 3) Create and return it
+            # Create and return it
             os.makedirs(new_folder)
             return new_folder
         i += 1
