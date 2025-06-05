@@ -16,6 +16,7 @@ You can control the behavior of the script by setting the following flags at the
 
 ```python
 TEST_MODEL = False
+TEST_MODEL_NAME = "model.pt"
 SAVE_MODEL = False
 RESULTS = True
 ```
@@ -23,6 +24,9 @@ RESULTS = True
 - `**TEST_MODEL**`:  
   - `True`: Load a previously saved model from `bin/model.pt` and evaluate it on the test set.  
   - `False`: Train a new model on the training set.
+
+- `**TEST_MODEL_NAME**`:
+  - The name of the model file in the bin folder to load or save.
 
 - `**SAVE_MODEL**`:  
   - `True`: Save the trained model to disk.

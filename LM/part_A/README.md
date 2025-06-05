@@ -16,6 +16,7 @@ You can enable or disable functionality by modifying these flags at the top of `
 
 ```python
 TEST_MODEL = True
+TEST_MODEL_NAME = "model.pt"
 SAVE_MODEL = True
 RESULTS = True
 ```
@@ -23,6 +24,9 @@ RESULTS = True
 - `**TEST_MODEL**`:  
   - `True`: Load a saved model from `bin/model.pt` and evaluate it on the test set.  
   - `False`: Train a new model from scratch.
+
+- `**TEST_MODEL_NAME**`:
+  - The name of the model file in the bin folder to load or save.
 
 - `**SAVE_MODEL**`:  
   - `True`: Save the best model after training.

@@ -7,6 +7,7 @@ import torch.optim as optim
 
 # Experiment flags
 TEST_MODEL = False
+TEST_MODEL_NAME = "model.pt" # Set the name of the model in the bin folder to test or save
 SAVE_MODEL = False
 RESULTS = True
 DEVICE = "cuda:0"
@@ -42,7 +43,7 @@ if __name__ == "__main__":
 
     # Load vocab from saved model if testing
     if TEST_MODEL:
-        saving_object = torch.load(os.path.join(path, "bin/model.pt"))
+        saving_object = torch.load(os.path.join(path, "bin", TEST_MODEL_NAME))
         lang.word2id = saving_object['w2id']
         lang.slot2id = saving_object['slot2id']
         lang.intent2id = saving_object['intent2id']
@@ -96,7 +97,7 @@ if __name__ == "__main__":
                 "slot2id": lang.slot2id,
                 "intent2id": lang.intent2id
             }
-            torch.save(saving_object, os.path.join(path, "bin/model.pt"))
+            torch.save(saving_object, os.path.join(path, "bin", TEST_MODEL_NAME))
 
         if RESULTS:
             # Save results and training curves

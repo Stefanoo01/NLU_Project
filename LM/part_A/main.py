@@ -6,6 +6,7 @@ from functools import partial
 import os
 
 TEST_MODEL = True
+TEST_MODEL_NAME = "model.pt" # Set the name of the model in the bin folder to test or save
 SAVE_MODEL = False
 RESULTS = False
 DEVICE = "cuda:0"
@@ -65,7 +66,7 @@ if __name__ == "__main__":
 
     if TEST_MODEL:
         # Load and evaluate a saved model
-        model.load_state_dict(torch.load(os.path.join(path, "bin/model.pt")))
+        model.load_state_dict(torch.load(os.path.join(path, "bin", TEST_MODEL_NAME)))
         final_ppl, _ = eval_loop(test_loader, criterion_eval, model)
     else:
         # Train and evaluate
@@ -75,7 +76,7 @@ if __name__ == "__main__":
 
         if SAVE_MODEL:
             # Save best model
-            torch.save(best_model.state_dict(), os.path.join(path, "bin/model.pt"))
+            torch.save(best_model.state_dict(), os.path.join(path, "bin", TEST_MODEL_NAME))
 
         if RESULTS:
             # Save results and plots

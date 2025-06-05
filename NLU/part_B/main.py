@@ -2,13 +2,13 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import pickle
 from torch.utils.data import DataLoader
 from utils import *
 from model import *
 from functions import *
 
 TEST_MODEL = False
+TEST_MODEL_NAME = "model.pt" # Set the name of the model in the bin folder to test or save
 SAVE_MODEL = False
 RESULTS = True
 DEVICE = "cuda:0"
@@ -48,9 +48,7 @@ if __name__ == "__main__":
 
     if TEST_MODEL:
         # Load saved mappings and model state
-        with open(os.path.join(path, "bin/lang.pkl"), "rb") as f:
-            lang = pickle.load(f)
-        saved = torch.load(os.path.join(path, "bin/model.pt"))
+        saved = torch.load(os.path.join(path, "bin", TEST_MODEL_NAME))
         lang.word2id   = saved["w2id"]
         lang.slot2id   = saved["slot2id"]
         lang.intent2id = saved["intent2id"]
@@ -133,10 +131,7 @@ if __name__ == "__main__":
                 "slot2id": lang.slot2id,
                 "intent2id": lang.intent2id,
             }
-            torch.save(to_save, os.path.join(path, "bin/model.pt"))
-            # Save Lang object
-            with open(os.path.join(path, "bin/lang.pkl"), "wb") as f:
-                pickle.dump(lang, f)
+            torch.save(to_save, os.path.join(path, "bin", TEST_MODEL_NAME))
         
         if RESULTS:
             # Save results
@@ -155,5 +150,3 @@ if __name__ == "__main__":
                         "slot2id": lang.slot2id, 
                         "intent2id": lang.intent2id}
             torch.save(saving_object, os.path.join(result_path, "model.pt"))
-            with open(os.path.join(result_path, "lang.pkl"), "wb") as f:
-                pickle.dump(lang, f)
