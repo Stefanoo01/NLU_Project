@@ -47,11 +47,12 @@ def train_loop(data, optimizer, criterion_slots, criterion_intents, model, clip=
         optimizer.step() # Update the weights
     return loss_array
 
-def train(model, config, train_loader, dev_loader, test_loader, criterion_slots, criterion_intents, optimizer, lang):
+def train(model, config, train_loader, dev_loader, test_loader,
+          criterion_slots, criterion_intents, optimizer, lang):
     slot_f1s, intent_accs = [], []
 
-   # Run multiple times 
-    for _ in tqdm(range(config["runs"])):
+    # Run multiple times 
+    for _ in tqdm(range(config["runs"]), desc="Runs"):
         patience = config["patience"]
         best_f1 = 0
         best_model = copy.deepcopy(model).to()
@@ -60,11 +61,19 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         losses_dev = []
         sampled_epochs = []
 
-        # Training loop
-        for epoch in tqdm(range(1, config["n_epochs"] + 1), leave=False, desc=f"F1: {f1 if epoch != 0 else 0}"):
-            loss = train_loop(train_loader, optimizer, criterion_slots, criterion_intents, model)
-            
-            # Evaluate on dev
+        # Create the tqdm bar once—no `desc` here
+        pbar = tqdm(range(1, config["n_epochs"] + 1), leave=False)
+        f1 = 0.0  # initialize to something
+
+        for epoch in pbar:
+            # Update the description whenever you like:
+            pbar.set_description(f"Epoch {epoch}/{config['n_epochs']} | Best F1: {best_f1:.4f}")
+
+            # --- Training step ---
+            loss = train_loop(train_loader, optimizer,
+                              criterion_slots, criterion_intents, model)
+
+            # --- Every 5 epochs, evaluate on dev set ---
             if epoch % 5 == 0:
                 sampled_epochs.append(epoch)
                 losses_train.append(np.asarray(loss).mean())
@@ -73,9 +82,10 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
                     dev_loader, criterion_slots, criterion_intents, model, lang
                 )
                 losses_dev.append(np.asarray(loss_dev).mean())
-                
+
                 f1 = results_dev["total"]["f"]
-                # Early stopping
+
+                # Early stopping logic
                 if f1 > best_f1:
                     best_f1 = f1
                     best_model = copy.deepcopy(model).to()
@@ -83,10 +93,11 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
                     patience = config["patience"]
                 else:
                     patience -= 1
-                if patience <= 0:
-                    break  # Early stopping
 
-        # Evaluate on test
+                if patience <= 0:
+                    break
+
+        # Evaluate on test with the best model from this run
         best_model.to()
         results_test, intent_test, _ = eval_loop(
             test_loader, criterion_slots, criterion_intents, best_model, lang
@@ -94,7 +105,6 @@ def train(model, config, train_loader, dev_loader, test_loader, criterion_slots,
         slot_f1s.append(results_test["total"]["f"])
         intent_accs.append(intent_test["accuracy"])
 
-    # Return the best model and its evaluation results
     return best_model, {
         "slot_f1_scores": np.asarray(slot_f1s),
         "intent_accuracies": np.asarray(intent_accs),
