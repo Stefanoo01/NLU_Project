@@ -45,9 +45,9 @@ if __name__ == "__main__":
 
     if TEST_MODEL:
         # Load saved mappings and model state
-        with open(os.path.join(path, "checkpoint", "lang.pkl"), "rb") as f:
+        with open(os.path.join(path, "bin/lang.pkl"), "rb") as f:
             lang = pickle.load(f)
-        saved = torch.load(os.path.join(path, "model.pt"))
+        saved = torch.load(os.path.join(path, "bin/model.pt"))
         lang.word2id   = saved["w2id"]
         lang.slot2id   = saved["slot2id"]
         lang.intent2id = saved["intent2id"]
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         print(f"Intent Acc: {history['intent_accuracy']}")
 
         if SAVE_MODEL:
-            os.makedirs(os.path.join(path, "checkpoint"), exist_ok=True)
+            os.makedirs(os.path.join(path, "bin"), exist_ok=True)
             # Save model state, optimizer state, and mappings
             to_save = {
                 "model": best_model.state_dict(),
@@ -130,9 +130,9 @@ if __name__ == "__main__":
                 "slot2id": lang.slot2id,
                 "intent2id": lang.intent2id,
             }
-            torch.save(to_save, os.path.join(path, "checkpoint", "model.pt"))
+            torch.save(to_save, os.path.join(path, "bin/model.pt"))
             # Save Lang object
-            with open(os.path.join(path, "checkpoint", "lang.pkl"), "wb") as f:
+            with open(os.path.join(path, "bin/lang.pkl"), "wb") as f:
                 pickle.dump(lang, f)
         
         if RESULTS:
