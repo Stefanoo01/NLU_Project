@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 import pickle
 from torch.utils.data import DataLoader
-from utils import load_data, create_dev_set, Lang, ATISDataset, PAD_TOKEN_LABEL
-from model import JointBertForIntentSlot
+from utils import *
+from model import *
 from functions import *
 
 TEST_MODEL = False
@@ -14,6 +14,9 @@ RESULTS = True
 DEVICE = "cuda:0"
 
 config = {
+    # Model
+    "model": "bert-base-uncased",  # 'bert-base-uncased' or 'bert-large-uncased'
+
     # Optimizer
     "lr": 2e-5,         
 
@@ -76,8 +79,8 @@ if __name__ == "__main__":
     # Instantiate model
     num_intents = len(lang.intent2id)
     num_slots   = len(lang.slot2id)
-    model = JointBertForIntentSlot(
-        pretrained_model_name="bert-base-uncased",
+    model = JointBert(
+        pretrained_model_name=config["model"],
         num_intent_labels=num_intents,
         num_slot_labels=num_slots,
         dropout_prob=0.1
@@ -152,5 +155,5 @@ if __name__ == "__main__":
                         "slot2id": lang.slot2id, 
                         "intent2id": lang.intent2id}
             torch.save(saving_object, os.path.join(result_path, "model.pt"))
-            with open(os.path.join(path, "checkpoint", "lang.pkl"), "wb") as f:
+            with open(os.path.join(result_path, "lang.pkl"), "wb") as f:
                 pickle.dump(lang, f)

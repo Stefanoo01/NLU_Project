@@ -90,7 +90,7 @@ class ATISDataset(Dataset):
         Args:
           data_list      : a Python list of dicts, each with keys 'utterance','slots','intent'
           lang           : an instance of Lang (so we know slot2id and intent2id)
-          tokenizer_name : which BERT model to load (e.g. 'bert-base-uncased')
+          tokenizer_name : which BERT model to load
           max_len        : maximum sequence length (pad/truncate to this)
         """
         self.sentences = [example["utterance"].split() for example in data_list]

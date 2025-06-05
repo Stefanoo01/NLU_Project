@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from transformers import BertModel, BertConfig
 
-class JointBertForIntentSlot(nn.Module):
+class JointBert(nn.Module):
     """
     Joint BERT model for intent classification + slot filling.
 
@@ -25,7 +25,7 @@ class JointBertForIntentSlot(nn.Module):
         """
         Args:
             pretrained_model_name (str):
-                HuggingFace name (or path) of a pre-trained BERT (e.g. "bert-base-uncased").
+                HuggingFace name (or path) of a pre-trained BERT.
             num_intent_labels (int):
                 Number of intent classes.
             num_slot_labels (int):
@@ -33,7 +33,7 @@ class JointBertForIntentSlot(nn.Module):
             dropout_prob (float, optional):
                 Dropout probability on top of BERT representations.
         """
-        super(JointBertForIntentSlot, self).__init__()
+        super(JointBert, self).__init__()
 
         # Load pre-trained BERT
         self.bert = BertModel.from_pretrained(pretrained_model_name)
