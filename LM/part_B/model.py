@@ -8,10 +8,12 @@ import numpy as np
 class VariationalDropout(nn.Module):
     def __init__(self, dropout_prob):
         super(VariationalDropout, self).__init__()
+        if not 0.0 <= dropout_prob < 1.0:
+            raise ValueError("dropout_prob must be in the half‑open interval [0, 1).")
         self.dropout_prob = dropout_prob
 
     def forward(self, inputs):
-        if not self.training:
+        if (not self.training) or self.dropout_prob == 0.0:
             return inputs
         # inputs shape: (seq_len, batch_size, feature_dim)
         # Sample mask once per sequence
@@ -25,18 +27,31 @@ class VariationalDropout(nn.Module):
         return inputs * mask
 
 class LM_LSTM(nn.Module):
-    def __init__(self, emb_size, hidden_size, output_size, pad_index=0, emb_dropout=0.5, out_dropout=0.5, n_layers=1):
+    def __init__(self, emb_size, hidden_size, output_size, pad_index=0, emb_dropout=0.5, out_dropout=0.5, n_layers=1, weight_tying=True, variational_dropout=True):
         super(LM_LSTM, self).__init__()
         self.embedding = nn.Embedding(output_size, emb_size, padding_idx=pad_index)
-        # Dropout
-        self.emb_dropout = VariationalDropout(emb_dropout)
+        # Choose dropout implementation
+        if variational_dropout:
+            self.emb_dropout = VariationalDropout(emb_dropout)
+            self.out_dropout = VariationalDropout(out_dropout)
+        else:
+            # Identity = no dropout (probability effectively 0.0)
+            self.emb_dropout = nn.Identity()
+            self.out_dropout = nn.Identity()
+        
+        # LSTM
         self.lstm = nn.LSTM(emb_size, hidden_size, n_layers, bidirectional=False, batch_first=True)
         self.pad_token = pad_index
-        # Dropout
-        self.out_dropout = VariationalDropout(out_dropout)
+
         self.output = nn.Linear(hidden_size, output_size, bias=False)
-        # Weight tying
-        if emb_size == hidden_size:
+         # Weight tying
+        if weight_tying:
+            if emb_size != hidden_size:
+                raise ValueError(
+                    "Weight tying requires emb_size == hidden_size (got "
+                    f"{emb_size} vs {hidden_size})."
+                )
+            # Share parameters
             self.output.weight = self.embedding.weight
         else:
             raise ValueError("Weight tying is not possible: embedding size and hidden size must be equal.")

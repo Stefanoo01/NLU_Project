@@ -121,7 +121,7 @@ class ATISDataset(Dataset):
         encoding = self.tokenizer(
             words,
             is_split_into_words=True,
-            truncation=True,
+            truncation=False,
             padding="max_length",
             max_length=self.max_len,
             return_tensors="pt"

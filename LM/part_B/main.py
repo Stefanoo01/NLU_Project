@@ -13,7 +13,7 @@ DEVICE = "cuda:0"
 
 config = {
     # Optimizer
-    'optimizer': 'AdamW',  # "SGD" or "AdamW"
+    'optimizer': 'SGD',  # "SGD" or "AdamW"
     'lr_starter': 0.005,
     'lr': 5,
     'weight_decay': 1e-6,  # Used for AdamW
