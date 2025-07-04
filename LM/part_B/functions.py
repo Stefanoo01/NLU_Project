@@ -53,7 +53,7 @@ def train_loop(data, optimizer, criterion, model, clip=5):
         
     return sum(loss_array)/sum(number_of_tokens)
 
-def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer):
+def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, criterion_eval, optimizer, avsgd=True):
     # Non-monotonic trigger class for switching to ASGD
     class NT_AVSGD_Trigger:
         def __init__(self, non_monotone_n=5):
@@ -118,7 +118,7 @@ def train(model, config, train_loader, dev_loader, n_epochs, criterion_train, cr
                 ppl_dev, loss_dev = eval_loop(dev_loader, criterion_eval, model)
 
                 # Check for non-monotonic trigger
-                if trigger.should_trigger(loss_dev):
+                if avsgd and trigger.should_trigger(loss_dev):
                     print(f"NT-AvSGD TRIGGERED at epoch {epoch}")
                     optimizer = optim.ASGD(model.parameters(), lr=config['lr'], t0=0, lambd=0.)
                     if hasattr(model, 'lstm') and isinstance(model.lstm, nn.LSTM):
